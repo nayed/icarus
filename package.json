@@ -7,7 +7,11 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "parity": "node scripts/parity.mjs",
+    "shots": "node scripts/shots.mjs",
+    "perf": "node scripts/perf.mjs",
+    "profile": "node scripts/profile.mjs"
   },
   "type": "module",
   "private": true,

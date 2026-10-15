@@ -1,0 +1,207 @@
+// window.__icarus: test/debug API used by the Playwright scripts (enabled with ?debug).
+import * as THREE from 'three';
+import type { App } from '../app.ts';
+import { terrainHeight } from '../world/terrain.ts';
+import { drawnHeight, vertexHeight, octavesForSpacing } from '../world/clipmap.ts';
+import { terrainVertexShader, terrainPrefix } from '../render/terrainMesh.ts';
+import { globals } from '../render/globals.ts';
+import { FullscreenPass, passMaterial } from '../render/fullscreen.ts';
+import { TERRAIN_OCTAVES } from '../world/params.ts';
+
+export interface ParityStats {
+  count: number;
+  maxErr: number;
+  meanErr: number;
+  worst: [number, number, number, number];
+}
+
+export function installDebugHooks(app: App): void {
+  const w = app.world;
+  const overrides = new Map<string, number | number[] | null>();
+  w.onBeforeRender = () => {
+    for (const [k, v] of overrides) {
+      const u = (globals as Record<string, { value: unknown }>)[k];
+      if (!u || v === null) continue;
+      if (typeof v === 'number') u.value = v;
+      else (u.value as { fromArray(a: number[]): void }).fromArray(v);
+    }
+  };
+  const api = {
+    get ready() {
+      return app.frames > 2;
+    },
+    get frame() {
+      return app.frames;
+    },
+    caps: app.caps,
+    setTime(h: number) {
+      w.timeOfDay = h;
+    },
+    setCamera(x: number, y: number, z: number, yaw: number, pitch: number, fov = 60) {
+      app.setCamera(x, y, z, yaw, pitch, fov);
+    },
+    setPaused(p: boolean) {
+      app.paused = p;
+    },
+    setFixedDt(dt: number | null) {
+      app.fixedDt = dt;
+    },
+    setAutoScale(on: boolean) {
+      w.scaler.enabled = on;
+      if (!on) w.scaler.scale = 1;
+    },
+    /** Override a shared uniform every frame (null clears the override). */
+    setUniform(name: string, value: number | number[] | null) {
+      overrides.set(name, value);
+      if (value === null) overrides.delete(name);
+    },
+    terrainHeight: (x: number, z: number, oct = TERRAIN_OCTAVES) => terrainHeight(x, z, oct),
+    drawnHeight: (x: number, z: number) => drawnHeight(x, z, w.clip),
+    info() {
+      const i = w.renderer.info;
+      return {
+        calls: i.render.calls,
+        triangles: i.render.triangles,
+        scale: w.scaler.scale,
+        size: [w.post.width, w.post.height],
+        preset: w.preset.name,
+        reversedZ: w.renderer.capabilities.reversedDepthBuffer,
+        logDepth: w.renderer.capabilities.logarithmicDepthBuffer,
+      };
+    },
+    /** Renders `frames` frames back to back with gl.finish(); returns ms per frame (GPU-bound estimate). */
+    benchmark(frames = 60, flyMps = 0) {
+      const gl = w.renderer.getContext();
+      const px = new Uint8Array(4);
+      // readPixels forces a real GPU sync (gl.finish() does not block in Chrome)
+      const sync = () => {
+        w.renderer.setRenderTarget(null);
+        gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+      };
+      const was = app.paused;
+      app.paused = true;
+      w.render(1 / 60);
+      sync();
+      const times: number[] = [];
+      for (let i = 0; i < frames; i++) {
+        if (flyMps) w.camera.translateZ(-flyMps / 60);
+        const t0 = performance.now();
+        w.render(1 / 60);
+        sync();
+        times.push(performance.now() - t0);
+      }
+      app.paused = was;
+      times.sort((a, b) => a - b);
+      const avg = times.reduce((a, b) => a + b, 0) / times.length;
+      return { avg, p50: times[Math.floor(times.length / 2)], p95: times[Math.floor(times.length * 0.95)], ...api.info() };
+    },
+    /** Per-pass GPU time (ms, averaged over `frames`). */
+    profile(frames = 30) {
+      const was = app.paused;
+      app.paused = true;
+      w.profile = new Map();
+      for (let i = 0; i < frames; i++) w.render(1 / 60);
+      const out: Record<string, number> = {};
+      for (const [k, v] of w.profile) out[k] = +(v / frames).toFixed(2);
+      w.profile = null;
+      app.paused = was;
+      return out;
+    },
+    /** GLSL terrainHeight() and clipVertexHeight() at the given points vs CPU. */
+    gpuTerrain(points: number[], spacing = 1) {
+      const n = points.length / 2;
+      const data = new Float32Array(n * 4);
+      for (let i = 0; i < n; i++) {
+        data[4 * i] = points[2 * i];
+        data[4 * i + 1] = points[2 * i + 1];
+      }
+      const tex = new THREE.DataTexture(data, n, 1, THREE.RGBAFormat, THREE.FloatType);
+      tex.needsUpdate = true;
+      const rt = new THREE.WebGLRenderTarget(n, 1, { type: THREE.FloatType, format: THREE.RGBAFormat, depthBuffer: false });
+      const mat = passMaterial(
+        terrainPrefix() +
+          /* glsl */ `
+          uniform sampler2D uPts;
+          uniform float uS;
+          out vec4 fragColor;
+          void main() {
+            vec2 p = texelFetch(uPts, ivec2(gl_FragCoord.xy), 0).xy;
+            fragColor = vec4(terrainHeight(p, TERRAIN_OCTAVES), clipVertexHeight(p, uS), terrainHeight(p, octavesForSpacing(uS)), 1.0);
+          }`,
+        { uPts: { value: tex }, uS: { value: spacing }, uClipCenter: w.terrain.uniforms.uClipCenter, uClipM: w.terrain.uniforms.uClipM },
+      );
+      new FullscreenPass(mat).render(w.renderer, rt);
+      const out = new Float32Array(n * 4);
+      w.renderer.readRenderTargetPixels(rt, 0, 0, n, 1, out);
+      let maxFn = 0;
+      let maxV = 0;
+      for (let i = 0; i < n; i++) {
+        const x = points[2 * i], z = points[2 * i + 1];
+        maxFn = Math.max(maxFn, Math.abs(out[4 * i] - terrainHeight(x, z, TERRAIN_OCTAVES)));
+        maxFn = Math.max(maxFn, Math.abs(out[4 * i + 2] - terrainHeight(x, z, octavesForSpacing(spacing))));
+        maxV = Math.max(maxV, Math.abs(out[4 * i + 1] - vertexHeight(x, z, spacing, w.clip)));
+      }
+      rt.dispose();
+      tex.dispose();
+      mat.dispose();
+      return { maxFunctionErr: maxFn, maxVertexErr: maxV, sample: Array.from(out.slice(0, 8)) };
+    },
+    /** Rasterises the real clipmap meshes from above and compares every pixel with drawnHeight(). */
+    rasterParity(cx: number, cz: number, extent: number, size = 512): ParityStats {
+      const rt = new THREE.WebGLRenderTarget(size, size, { type: THREE.FloatType, format: THREE.RGBAFormat });
+      const cam = new THREE.OrthographicCamera(-extent / 2, extent / 2, extent / 2, -extent / 2, 1, 12000);
+      cam.position.set(cx, 6000, cz);
+      cam.up.set(0, 0, -1);
+      cam.lookAt(cx, 0, cz);
+      cam.updateMatrixWorld();
+      const mat = new THREE.ShaderMaterial({
+        glslVersion: THREE.GLSL3,
+        vertexShader: terrainVertexShader(),
+        fragmentShader: /* glsl */ `
+          in vec3 vWorld; in vec3 vNormal; in float vMorph;
+          out vec4 fragColor;
+          #include <logdepthbuf_pars_fragment>
+          void main() {
+            #include <logdepthbuf_fragment>
+            fragColor = vec4(vWorld, 1.0);
+          }`,
+        uniforms: { ...globals, ...w.terrain.uniforms },
+        defines: { ...w.terrain.defines },
+      });
+      const scene = new THREE.Scene();
+      scene.overrideMaterial = mat;
+      const saved = { pos: globals.uCamPosF.value.clone(), rot: globals.uViewRot.value.clone() };
+      globals.uCamPosF.value.set(Math.fround(cx), Math.fround(6000), Math.fround(cz));
+      globals.uViewRot.value.extractRotation(cam.matrixWorldInverse);
+      const parent = w.terrain.group.parent;
+      scene.add(w.terrain.group);
+      w.renderer.setRenderTarget(rt);
+      w.renderer.setClearColor(0x000000, 0);
+      w.renderer.clear(true, true, false);
+      w.renderer.render(scene, cam);
+      w.renderer.setClearColor(0x000000, 1);
+      parent?.add(w.terrain.group);
+      globals.uCamPosF.value.copy(saved.pos);
+      globals.uViewRot.value.copy(saved.rot);
+      const px = new Float32Array(size * size * 4);
+      w.renderer.readRenderTargetPixels(rt, 0, 0, size, size, px);
+      rt.dispose();
+      mat.dispose();
+      let count = 0, maxErr = 0, sum = 0;
+      let worst: [number, number, number, number] = [0, 0, 0, 0];
+      for (let i = 0; i < size * size; i++) {
+        if (px[4 * i + 3] < 0.5) continue;
+        const x = px[4 * i], y = px[4 * i + 1], z = px[4 * i + 2];
+        const e = Math.abs(drawnHeight(x, z, w.clip) - y);
+        count++;
+        sum += e;
+        if (e > maxErr) {
+          maxErr = e;
+          worst = [x, z, y, drawnHeight(x, z, w.clip)];
+        }
+      }
+      return { count, maxErr, meanErr: sum / Math.max(1, count), worst };
+    },
+  };
+  (window as unknown as { __icarus: typeof api }).__icarus = api;
+}
