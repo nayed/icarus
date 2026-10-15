@@ -152,6 +152,11 @@ vec3 flatClouds(vec3 d, vec3 base) {
   float ps = 0.18 + 1.4 * miePhase(dot(d, uSunDir), 0.6);
   float pm = 0.18 + 1.4 * miePhase(dot(d, uMoonDir), 0.6);
   vec3 lit = (uSunIllum * sunT * ps + uMoonIllum * moonT * pm) * mix(0.9, 0.35, thick) + skyRadiance(vec3(0.0, 1.0, 0.0)) * 0.8;
+#ifdef FLAT_CLOUDS_IN_VIEW
+  // seen directly, the flat layer needs the softer, greyer look of the volumetric one
+  lit = mix(vec3(lum3(lit)), lit, 0.55) * 0.85;
+  a *= 0.85;
+#endif
   return mix(base, lit, a * 0.9);
 }
 
@@ -162,7 +167,11 @@ vec3 skyColor(vec3 d, float pixAngle, vec2 frag, bool withDiscs) {
   col += aurora(d, frag, pixAngle);
   if (withDiscs) col += moonDisc(d) + sunDisc(d);
   col = cirrus(d, col);
+#ifdef FLAT_CLOUDS_IN_VIEW
+  col = flatClouds(d, col); // no volumetric layer on this device: the flat one stands in everywhere
+#else
   if (!withDiscs || uReflectPass > 0.5) col = flatClouds(d, col);
+#endif
   return col;
 }
 `;
@@ -226,10 +235,11 @@ export class Sky {
     uCamWorld: { value: new THREE.Matrix4() },
   };
 
-  constructor(type: THREE.TextureDataType, envWidth = 256) {
+  constructor(type: THREE.TextureDataType, envWidth = 256, flatCloudsInView = false) {
     const uniforms = { ...globals, ...this.uniforms };
     const mat = new THREE.ShaderMaterial({
       glslVersion: THREE.GLSL3,
+      defines: flatCloudsInView ? { FLAT_CLOUDS_IN_VIEW: 1 } : {},
       vertexShader: SKY_VERT,
       fragmentShader: skyShaderPrefix() + SKY_FRAG,
       uniforms,

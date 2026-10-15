@@ -210,10 +210,14 @@ export function installDebugHooks(app: App): void {
         preset: w.preset.name,
         reversedZ: w.renderer.capabilities.reversedDepthBuffer,
         logDepth: w.renderer.capabilities.logarithmicDepthBuffer,
+        hdr: w.caps.floatTargets,
       };
     },
-    /** Renders `frames` frames back to back with gl.finish(); returns ms per frame (GPU-bound estimate). */
-    benchmark(frames = 60, flyMps = 0) {
+    /**
+     * Renders `frames` frames back to back, each followed by a GPU sync; returns ms per frame.
+     * full = true runs whole app frames (simulation, cameras, HUD, audio and render).
+     */
+    benchmark(frames = 60, flyMps = 0, full = false) {
       const gl = w.renderer.getContext();
       const px = new Uint8Array(4);
       // readPixels forces a real GPU sync (gl.finish() does not block in Chrome)
@@ -229,7 +233,11 @@ export function installDebugHooks(app: App): void {
       for (let i = 0; i < frames; i++) {
         if (flyMps) w.camera.translateZ(-flyMps / 60);
         const t0 = performance.now();
-        w.render(1 / 60);
+        if (full) {
+          app.paused = false;
+          app.frame(1 / 60);
+          app.paused = true;
+        } else w.render(1 / 60);
         sync();
         times.push(performance.now() - t0);
       }

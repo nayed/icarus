@@ -87,7 +87,7 @@ void main() {
   vMorph = k;
   vec3 rel = vWorld - uCamPosF;
   gl_Position = projectionMatrix * (uViewRot * vec4(rel, 1.0));
-  #include <logdepthbuf_vertex>
+  #include <icarus_logdepth_vertex>
 }
 `;
 

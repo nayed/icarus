@@ -130,8 +130,8 @@ export class Post {
   };
   private readonly downU = { uSrc: { value: null as THREE.Texture | null }, uTexel: { value: new THREE.Vector2() }, uKaris: { value: 0 } };
   private readonly upU = { uSrc: { value: null as THREE.Texture | null }, uTexel: { value: new THREE.Vector2() }, uWeight: { value: 1 } };
-  width = 1;
-  height = 1;
+  width = 0;
+  height = 0;
 
   constructor(readonly opts: PostOptions) {
     const type = opts.hdr ? THREE.HalfFloatType : THREE.UnsignedByteType;
@@ -170,6 +170,12 @@ export class Post {
     this.composite = new FullscreenPass(passMaterial(COMPOSITE_FRAG, this.composeUniforms, defines));
     this.composeUniforms.uScene.value = this.scene.texture;
     this.composeUniforms.uBloom.value = this.mips[0]?.texture ?? null;
+  }
+
+  dispose(): void {
+    this.scene.depthTexture?.dispose();
+    this.scene.dispose();
+    for (const m of this.mips) m.dispose();
   }
 
   setSize(w: number, h: number): void {

@@ -21,7 +21,7 @@ void main() {
   vColor = aColor;
   vMat = aMat;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  #include <logdepthbuf_vertex>
+  #include <icarus_logdepth_vertex>
 }
 `;
 

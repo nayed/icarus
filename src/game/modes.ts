@@ -3,7 +3,8 @@ import * as THREE from 'three';
 import type { App, StartPoint } from '../app.ts';
 import { buildCourse, coursePar, type Gate } from './course.ts';
 import { gradeLanding, gradeRings, formatTime, type ModeResult } from './grading.ts';
-import type { Touchdown } from '../sim/aircraft.ts';
+import type { Touchdown, PilotInput } from '../sim/aircraft.ts';
+import { Autopilot } from '../sim/autopilot.ts';
 import { STRIPS, headingDir } from '../world/params.ts';
 import { runwayLocal } from '../sim/environment.ts';
 import { globals } from '../render/globals.ts';
@@ -11,7 +12,7 @@ import { ATMOSPHERE_GLSL, SKYVIEW_SAMPLE_GLSL } from '../render/atmosphere.ts';
 import { GLOBALS_GLSL } from '../render/globals.ts';
 import { OUTPUT_GLSL } from '../render/post.ts';
 
-export type ModeKind = 'free' | 'rings' | 'landing';
+export type ModeKind = 'free' | 'rings' | 'landing' | 'attract';
 
 const GATE_VISUAL_RADIUS = 20;
 
@@ -120,7 +121,7 @@ void main() {
   vWorld = wp.xyz;
   vNormal = normalize(mat3(modelMatrix) * normal);
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  #include <logdepthbuf_vertex>
+  #include <icarus_logdepth_vertex>
 }
 `;
 const RING_FRAG = /* glsl */ `
@@ -424,7 +425,50 @@ export class MountainLanding extends GameMode {
   }
 }
 
+// ---------------------------------------------------------------- attract (menu background)
+
+/** The autopilot tours the fjord while the menu is open; the cinematic camera does the rest. */
+export class AttractFlight extends GameMode {
+  readonly kind = 'attract' as const;
+  private readonly ap = new Autopilot();
+  private readonly route = buildCourse();
+  private next = 1;
+  private dir = 1;
+  private readonly inp: PilotInput = { pitch: 0, roll: 0, yaw: 0, throttle: 0.6, brake: 0, flapNotch: 0, gearDown: false, trim: 0 };
+
+  begin(): void {
+    const a = this.route[0];
+    const b = this.route[1];
+    const hdg = (Math.atan2(b.x - a.x, -(b.z - a.z)) * 180) / Math.PI;
+    this.app.ac.reset(a.x, a.y + 230, a.z, hdg, 46);
+    this.app.startFlightAt();
+    this.app.inputOverride = this.inp;
+  }
+
+  override simStep(): void {
+    const ac = this.app.ac;
+    if (ac.crashed) {
+      this.begin();
+      return;
+    }
+    const g = this.route[this.next];
+    const d = Math.hypot(g.x - ac.pos.x, g.z - ac.pos.z);
+    if (d < 160) {
+      if (this.next + this.dir < 0 || this.next + this.dir >= this.route.length) this.dir = -this.dir;
+      this.next += this.dir;
+    }
+    const t = this.route[this.next];
+    const hdg = (Math.atan2(t.x - ac.pos.x, -(t.z - ac.pos.z)) * 180) / Math.PI;
+    this.ap.update(ac, { heading: (hdg + 360) % 360, altitude: t.y + 230, speed: 45, maxBank: 22 }, this.app.telemetry.ias || 45, 1 / 120, this.inp);
+  }
+
+  hud(): ModeHud {
+    return { title: '' };
+  }
+}
+
 export function createMode(app: App, kind: ModeKind, start: StartPoint = 'runway'): GameMode {
+  if (kind === 'attract') return new AttractFlight(app);
   if (kind === 'rings') return new RingRun(app);
   if (kind === 'landing') return new MountainLanding(app);
   return new FreeFlight(app, start);

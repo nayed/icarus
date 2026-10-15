@@ -11,10 +11,20 @@ import { TerrainShadows } from './shadows.ts';
 import { Trees } from './trees.ts';
 import { Water } from './water.ts';
 import { globals } from './globals.ts';
+import { GpuTimer } from './gpuTimer.ts';
 import {
   sunDirection, moonDirection, starRotation, exposureForSun, elevationDeg, SUN_ILLUMINANCE, MOON_ILLUMINANCE_SCALE, MOON_ILLUMINATION,
 } from '../world/celestial.ts';
 import { makeClipState, type ClipState } from '../world/clipmap.ts';
+
+// three's logdepthbuf_vertex chunk calls isPerspectiveMatrix() from <common>, which the custom
+// shaders here do not include (it would clash with their own helpers): a self-contained copy
+(THREE.ShaderChunk as unknown as Record<string, string>).icarus_logdepth_vertex = /* glsl */ `
+#ifdef USE_LOGARITHMIC_DEPTH_BUFFER
+  vFragDepth = 1.0 + gl_Position.w;
+  vIsPerspective = projectionMatrix[2][3] == -1.0 ? 1.0 : 0.0;
+#endif
+`;
 
 const tmpV = new THREE.Vector3();
 
@@ -23,14 +33,15 @@ export class WorldRenderer {
   readonly scene = new THREE.Scene();
   readonly camera: THREE.PerspectiveCamera;
   readonly atmosphere: Atmosphere;
-  readonly sky: Sky;
+  sky: Sky;
   terrain: TerrainMesh;
-  readonly post: Post;
+  post: Post;
   clouds: Clouds | null = null;
   shadows: TerrainShadows | null = null;
   trees: Trees;
   water: Water;
   readonly scaler = new ResolutionScaler();
+  readonly gpuTimer: GpuTimer;
   preset: QualityPreset;
   /** Clip state of the last rendered frame: collision must use this. */
   clip: ClipState;
@@ -75,13 +86,14 @@ export class WorldRenderer {
     });
     this.renderer.autoClear = true;
     this.renderer.info.autoReset = false;
+    this.gpuTimer = new GpuTimer(this.renderer.getContext() as WebGL2RenderingContext);
     this.renderer.setClearColor(0x000000, 1);
     this.camera = new THREE.PerspectiveCamera(60, 1, 0.2, 400000);
     const floatType = caps.floatTargets ? (caps.floatLinear ? THREE.FloatType : THREE.HalfFloatType) : THREE.UnsignedByteType;
     this.atmosphere = new Atmosphere(caps.floatTargets ? floatType : THREE.HalfFloatType);
     globals.uTransmittance.value = this.atmosphere.transmittance.texture;
     globals.uSkyView.value = this.atmosphere.skyView.texture;
-    this.sky = new Sky(caps.floatTargets ? THREE.HalfFloatType : THREE.UnsignedByteType, this.preset.envWidth);
+    this.sky = new Sky(caps.floatTargets ? THREE.HalfFloatType : THREE.UnsignedByteType, this.preset.envWidth, !caps.floatTargets);
     this.scene.add(this.sky.mesh);
     this.terrain = new TerrainMesh(
       { M: this.preset.terrainM, levels: this.preset.terrainLevels, s0: this.preset.terrainS0 },
@@ -128,9 +140,25 @@ export class WorldRenderer {
     this.scene.add(this.trees.mesh);
     const wind = globals.uWind.value;
     this.scene.remove(this.water.group);
+    this.water.reflection?.dispose();
     this.water = this.makeWater();
     this.water.setWind(wind.x, wind.z);
     this.scene.add(this.water.group);
+    // environment map size, post (bloom levels, MSAA), clouds and shadows also depend on the preset
+    const hdr = this.caps.floatTargets;
+    this.scene.remove(this.sky.mesh);
+    this.sky.env.dispose();
+    this.sky = new Sky(hdr ? THREE.HalfFloatType : THREE.UnsignedByteType, this.preset.envWidth, !hdr);
+    this.sky.mesh.layers.enable(1);
+    this.scene.add(this.sky.mesh);
+    this.post.dispose();
+    this.post = new Post({ hdr, bloomLevels: this.preset.bloomLevels, samples: this.preset.msaa });
+    this.clouds?.dispose();
+    this.clouds = hdr ? new Clouds(THREE.HalfFloatType, this.preset.cloudDiv, this.preset.cloudSteps) : null;
+    this.shadows?.dispose();
+    this.shadows = hdr ? new TerrainShadows(this.preset.shadowSize, 32000) : null;
+    this.scaler.scale = 1;
+    this.scaler.hold(2);
     this.applySize();
   }
 
@@ -239,6 +267,7 @@ export class WorldRenderer {
 
     const r = this.renderer;
     r.info.reset();
+    this.gpuTimer.begin();
     this.mark('start');
     this.atmosphere.init(r);
     this.atmosphere.update(r);
@@ -270,6 +299,7 @@ export class WorldRenderer {
     } else {
       this.post.finish(r, this.frame);
     }
+    this.gpuTimer.end();
     this.mark('post');
   }
 }

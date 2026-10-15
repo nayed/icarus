@@ -21,6 +21,16 @@ import { AIRCRAFT } from './sim/config.ts';
 import { STRIPS, SEA_LEVEL } from './world/params.ts';
 import { createMode, type GameMode, type ModeKind } from './game/modes.ts';
 import type { ModeResult } from './game/grading.ts';
+import { Hud } from './ui/hud.ts';
+
+/** What the app needs from the DOM user interface. */
+export interface UiHooks {
+  showMenu(): void;
+  showPause(): void;
+  showResults(r: ModeResult): void;
+  hideAll(): void;
+  toast(html: string): void;
+}
 
 export type StartPoint = 'runway' | 'water' | 'air' | 'mountain-approach' | 'rings';
 
@@ -53,6 +63,8 @@ export class App {
   settings: FlightSettings = { model: 'assisted', timeOfDay: TIME_PRESETS.dusk, timeFlow: 0.5, windFrom: 40, windSpeed: 4, clouds: 0.45, volume: 0.7 };
   lampOn = false;
   hudVisible = true;
+  /** main-thread time of the last frame (ms) */
+  cpuMs = 0;
   /** when set, replaces keyboard input (tests) */
   inputOverride: PilotInput | null = null;
   /** free camera for debug screenshots */
@@ -69,6 +81,9 @@ export class App {
   private readonly drawPos = new THREE.Vector3();
   private readonly drawQuat = new THREE.Quaternion();
   private mouseDown = false;
+  readonly hud: Hud;
+  ui: UiHooks | null = null;
+  private readonly urlParams = new URLSearchParams(location.search);
   /** current game mode */
   session: GameMode | null = null;
   sessionKind: ModeKind = 'free';
@@ -80,10 +95,10 @@ export class App {
   onSimStep: ((dt: number) => void)[] = [];
   onActionHooks: ((a: Action) => void)[] = [];
 
-  constructor(readonly canvas: HTMLCanvasElement, readonly caps: Capabilities) {
+  constructor(readonly canvas: HTMLCanvasElement, readonly caps: Capabilities, initialQuality: QualityName = 'medium') {
     const q = new URLSearchParams(location.search);
-    const quality = (q.get('q') as QualityName) ?? 'high';
-    this.world = new WorldRenderer(canvas, caps, ['low', 'medium', 'high'].includes(quality) ? quality : 'high');
+    const quality = (q.get('q') as QualityName) ?? initialQuality;
+    this.world = new WorldRenderer(canvas, caps, ['low', 'medium', 'high'].includes(quality) ? quality : 'medium');
     this.env = new WorldEnv(this.world.terrain.cfg);
     const ldr = !caps.floatTargets;
     this.plane = new PlaneModel(ldr);
@@ -122,6 +137,7 @@ export class App {
     });
     addEventListener('keydown', () => this.audio.start(), { once: true });
 
+    this.hud = new Hud(document.getElementById('hud') as HTMLCanvasElement);
     new ResizeObserver(() => this.onResize()).observe(canvas.parentElement!);
     this.onResize();
 
@@ -130,9 +146,46 @@ export class App {
       const c = cam.split(',').map(Number);
       this.setFreeCamera(c[0], c[1], c[2], c[3], c[4], c[5] ?? 60);
     }
-    this.startSession((q.get('mode') as ModeKind) ?? 'free', (q.get('start') as StartPoint) ?? 'runway');
+    if (q.has('nohud')) this.hudVisible = false;
     if (q.has('debug')) installDebugHooks(this);
+  }
+
+  /** Starts the loop: straight into a session when the URL asks for one (tests), else the menu. */
+  boot(ui: UiHooks | null): void {
+    this.ui = ui;
+    const q = this.urlParams;
+    if (q.has('mode') || q.has('start') || !ui) this.startSession((q.get('mode') as ModeKind) ?? 'free', (q.get('start') as StartPoint) ?? 'runway');
+    else this.enterMenu();
     requestAnimationFrame(this.loop);
+  }
+
+  /** Main menu over an autopilot flight filmed by the cinematic camera. */
+  enterMenu(): void {
+    this.startSession('attract');
+    this.rig.setMode('cinematic');
+    this.freeCamera = false;
+    this.ui?.showMenu();
+  }
+
+  pause(): void {
+    if (this.state !== 'flying') return;
+    this.state = 'paused';
+    this.audio.setMuted(true);
+    this.ui?.showPause();
+  }
+
+  resume(): void {
+    if (this.state !== 'paused') return;
+    this.state = 'flying';
+    this.audio.setMuted(false);
+    this.ui?.hideAll();
+    this.last = performance.now();
+  }
+
+  setQuality(q: QualityName): void {
+    this.world.setQuality(q);
+    this.recentreSurface();
+    this.onResize();
   }
 
   applySettings(): void {
@@ -188,6 +241,8 @@ export class App {
     this.lampOn = this.isDark();
     this.rig.snap();
     this.recentreSurface();
+    // the trees right around the start appear at once; the rest stream in nearest first
+    this.world.trees.prefill(ac.pos.x, ac.pos.z, 500);
   }
 
   /** Starts (or restarts) a game mode. */
@@ -199,10 +254,21 @@ export class App {
     this.ac.onTouchdown = null;
     this.session = createMode(this, kind, start);
     this.session.begin();
-    this.state = 'flying';
+    // a new spot re-bakes the terrain around the camera: do not read that as the GPU being slow
+    this.world.scaler.hold(1);
+    this.state = kind === 'attract' ? 'menu' : 'flying';
+    if (kind !== 'attract') {
+      this.ui?.hideAll();
+      if (!this.urlParams.has('cam')) {
+        this.freeCamera = false;
+        this.rig.setMode('chase');
+      }
+      this.audio.setMuted(false);
+    }
   }
 
   restartSession(): void {
+    if (this.sessionKind === 'attract') return;
     this.startSession(this.sessionKind, this.sessionStart);
   }
 
@@ -243,25 +309,46 @@ export class App {
 
   private onAction(a: Action): void {
     for (const h of this.onActionHooks) h(a);
+    if (a === 'fullscreen') {
+      void toggleFullscreen();
+      return;
+    }
+    if (a === 'pause') {
+      if (this.state === 'flying') this.pause();
+      else if (this.state === 'paused') this.resume();
+      return;
+    }
+    if (a === 'restart' && (this.state === 'flying' || this.state === 'paused')) {
+      this.restartSession();
+      return;
+    }
     if (this.state !== 'flying') return;
+    const label = (m: CameraMode) => ({ chase: 'Chase', cockpit: 'Cockpit', cinematic: 'Cinematic' })[m];
     if (a === 'camera') {
       this.freeCamera = false;
-      this.rig.cycle();
-    } else if (a === 'camChase') this.setCameraMode('chase');
-    else if (a === 'camCockpit') this.setCameraMode('cockpit');
-    else if (a === 'camCinematic') this.setCameraMode('cinematic');
-    else if (a === 'light') {
+      this.ui?.toast(`Camera <i>·</i> ${label(this.rig.cycle())}`);
+    } else if (a === 'camChase' || a === 'camCockpit' || a === 'camCinematic') {
+      const m: CameraMode = a === 'camChase' ? 'chase' : a === 'camCockpit' ? 'cockpit' : 'cinematic';
+      this.setCameraMode(m);
+      this.ui?.toast(`Camera <i>·</i> ${label(m)}`);
+    } else if (a === 'light') {
       this.lampOn = !this.lampOn;
       this.audio.click();
+      this.ui?.toast(`Landing light <i>·</i> ${this.lampOn ? 'on' : 'off'}`);
     } else if (a === 'hud') this.hudVisible = !this.hudVisible;
-    else if (a === 'gear') this.audio.motor(4);
-    else if (a === 'flapsDown' || a === 'flapsUp') this.audio.motor(1.2);
-    else if (a === 'fullscreen') void toggleFullscreen();
+    else if (a === 'gear') {
+      this.audio.motor(4);
+      this.ui?.toast(`Gear <i>·</i> ${this.controls.input.gearDown ? 'down' : 'up'}`);
+    } else if (a === 'flapsDown' || a === 'flapsUp') {
+      this.audio.motor(1.2);
+      this.ui?.toast(`Flaps <i>·</i> ${['up', '15°', '30°', '45°'][this.controls.input.flapNotch]}`);
+    }
   }
 
   private onResize(): void {
     const el = this.canvas.parentElement!;
     this.world.resize(el.clientWidth, el.clientHeight);
+    this.hud.setSize(el.clientWidth, el.clientHeight);
   }
 
   /** Steps the flight model once (fixed dt). */
@@ -288,10 +375,12 @@ export class App {
 
   /** One frame: input, physics catch-up, camera, render. */
   frame(dt: number, realDt = dt): void {
+    const cpuStart = performance.now();
     const flying = this.state === 'flying';
+    const simulate = flying || this.state === 'menu';
     this.controls.enabled = flying && !this.inputOverride;
     this.controls.update(dt);
-    if (flying) {
+    if (simulate) {
       this.acc += Math.min(dt, 0.25);
       while (this.acc >= SIM_DT) {
         this.stepSim();
@@ -301,7 +390,7 @@ export class App {
       this.world.timeOfDay = (this.world.timeOfDay + (this.settings.timeFlow * dt) / 60 + 24) % 24;
       this.settings.timeOfDay = this.world.timeOfDay;
     }
-    const alpha = flying ? this.acc / SIM_DT : 1;
+    const alpha = simulate ? this.acc / SIM_DT : 1;
     this.drawPos.lerpVectors(this.prevPos, this.ac.pos, alpha);
     this.drawQuat.slerpQuaternions(this.prevQuat, this.ac.q, alpha);
     this.world.waveTime = this.simTime + this.acc;
@@ -320,10 +409,32 @@ export class App {
     if (flying && this.session?.result) {
       this.state = 'results';
       this.onResult?.(this.session.result);
+      this.ui?.showResults(this.session.result);
     }
     for (const f of this.onFrame) f(dt);
     this.world.render(dt);
+    if (this.state === 'flying' && this.hudVisible && this.session && this.session.kind !== 'attract') {
+      this.hud.draw(
+        {
+          tel: this.telemetry,
+          mode: this.session.hud(),
+          camera: this.world.camera,
+          cameraMode: this.freeCamera ? 'free' : this.rig.mode,
+          aircraftPos: this.drawPos,
+          aircraftVel: this.ac.vel,
+          aircraftQuat: this.drawQuat,
+          lamp: this.lampOn,
+          modelName: this.ac.model,
+          timeOfDay: this.world.timeOfDay,
+          windFrom: this.settings.windFrom,
+          windKt: this.settings.windSpeed * 1.944,
+          time: this.simTime,
+        },
+        dt,
+      );
+    } else this.hud.clear();
     this.strips.update(this.env.baseWind, globals.uExposure.value, this.simTime, this.isDark() ? 1 : 0.2);
+    this.audio.ambient = this.state === 'menu' ? 0.35 : 1;
     this.audio.update({
       rpm: this.ac.rpm,
       throttle: this.ac.throttle,
@@ -335,7 +446,14 @@ export class App {
       groundSpeed: this.telemetry.groundSpeed,
     });
     this.frames++;
-    if (this.world.scaler.update(realDt * 1000, realDt)) this.onResize();
+    // resolution scaling: from the measured GPU/CPU work when GPU timers exist (a frame that misses
+    // vsync still counts through the interval term), else from the frame interval alone
+    const timer = this.world.gpuTimer;
+    timer.poll();
+    this.cpuMs = performance.now() - cpuStart;
+    const measured = timer.lastMs >= 0;
+    const cost = measured ? Math.max(timer.lastMs, this.cpuMs, realDt * 750) : realDt * 1000;
+    if (this.world.scaler.update(cost, realDt, measured)) this.onResize();
   }
 }
 

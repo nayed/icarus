@@ -28,6 +28,9 @@ export class SoundEngine {
   private noise!: AudioBuffer;
   private cabin!: BiquadFilterNode;
   volume = 0.7;
+  /** extra gain factor (quieter behind the menu) */
+  ambient = 1;
+  private appliedAmbient = 1;
   private muted = false;
 
   /** Must be called from a user gesture. */
@@ -157,18 +160,22 @@ export class SoundEngine {
 
   setVolume(v: number): void {
     this.volume = v;
-    if (this.ctx && !this.muted) this.master.gain.setTargetAtTime(v, this.ctx.currentTime, 0.1);
+    if (this.ctx && !this.muted) this.master.gain.setTargetAtTime(v * this.ambient, this.ctx.currentTime, 0.1);
   }
 
   setMuted(m: boolean): void {
     this.muted = m;
-    if (this.ctx) this.master.gain.setTargetAtTime(m ? 0 : this.volume, this.ctx.currentTime, 0.15);
+    if (this.ctx) this.master.gain.setTargetAtTime(m ? 0 : this.volume * this.ambient, this.ctx.currentTime, 0.15);
   }
 
   update(s: AudioState): void {
     const ctx = this.ctx;
     if (!ctx) return;
     const t = ctx.currentTime;
+    if (this.ambient !== this.appliedAmbient && !this.muted) {
+      this.appliedAmbient = this.ambient;
+      this.master.gain.setTargetAtTime(this.volume * this.ambient, t, 0.4);
+    }
     const rps = Math.max(s.rpm, 1) / 60;
     // 9-cylinder radial: firing frequency = rps * 4.5
     this.crank.frequency.setTargetAtTime(rps, t, 0.05);

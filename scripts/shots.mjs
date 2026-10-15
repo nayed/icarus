@@ -22,7 +22,7 @@ const prefix = args.prefix ?? 'shot';
 const server = await startServer();
 const { browser, page, problems } = await launch({ width: w, height: h });
 const extra = args.extra ? '&' + args.extra : '';
-await page.goto(`${server.url}?debug&q=${args.q ?? 'high'}${extra}`);
+await page.goto(`${server.url}?debug&noui&nohud&q=${args.q ?? 'high'}${extra}`);
 await waitFrames(page, 3, 180000);
 await page.evaluate(() => window.__icarus.setAutoScale(false));
 console.log('info', JSON.stringify(await page.evaluate(() => window.__icarus.info())));

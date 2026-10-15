@@ -117,13 +117,14 @@ for (const model of models) {
   await key('KeyF', false);
   let warn = null;
   let stall = null;
-  const alt0 = s.altitude;
-  let minAlt = alt0;
+  // altitude lost from the break to the bottom of the recovery
+  let altBreak = null;
+  let minAfter = Infinity;
   let maxAlpha = 0;
   const t1 = Date.now();
   while (Date.now() - t1 < 60000) {
     s = await st();
-    minAlt = Math.min(minAlt, s.altitude);
+    if (stall) minAfter = Math.min(minAfter, s.altitude);
     maxAlpha = Math.max(maxAlpha, s.alpha);
     if (s.crashed) break;
     if (!stall) {
@@ -133,6 +134,7 @@ for (const model of models) {
       if (s.stallWarning && !warn) warn = Date.now();
       if (s.stalled || s.alpha > 16.5) {
         stall = Date.now();
+        altBreak = s.altitude;
         if (model !== 'arcade') await shot(page, `flight-${model}-stall`);
       }
       // arcade/assisted protect the stall: stop after holding full back-pressure for a while
@@ -153,7 +155,8 @@ for (const model of models) {
   await releaseAll();
   s = await st();
   if (model === 'simulation') {
-    check(!!warn && !!stall && warn <= stall, `stall: warning ${warn ? 'before' : 'missing'} the break, max α ${maxAlpha.toFixed(1)}°, height lost ${(alt0 - minAlt).toFixed(0)} m`);
+    const lost = altBreak === null ? 0 : altBreak - minAfter;
+    check(!!warn && !!stall && warn <= stall && lost > 3, `stall: warning ${warn ? 'before' : 'missing'} the break, max α ${maxAlpha.toFixed(1)}°, ${lost.toFixed(0)} m lost from the break to the recovery`);
     check(!s.crashed && s.vs > -3 && s.ias > 28, `stall recovery: ${s.crashed ? 'crashed ' + s.crashReason : `${(s.ias * 1.944).toFixed(0)} kt, ${(s.vs * 196.85).toFixed(0)} fpm`}`);
   } else {
     check(!s.crashed, `${model} stall protection: ${stall ? 'stalled' : 'no stall'} with full back-pressure (max α ${maxAlpha.toFixed(1)}°), warning ${warn ? 'shown' : 'not shown'}`);

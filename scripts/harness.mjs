@@ -1,7 +1,7 @@
 // Shared Playwright harness: starts Vite, launches headless Chromium with WebGL,
 // collects console output and fails loudly on shader errors / exceptions.
 import { chromium } from 'playwright';
-import { createServer } from 'vite';
+import { createServer, preview } from 'vite';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,7 +15,13 @@ const GPU_FLAGS = {
   vulkan: ['--use-angle=vulkan', '--enable-features=Vulkan', '--enable-gpu', '--ignore-gpu-blocklist'],
 };
 
-export async function startServer() {
+export async function startServer({ production = process.env.ICARUS_PROD === '1' } = {}) {
+  if (production) {
+    // the built bundle in dist/ (run `npm run build` first)
+    const server = await preview({ root: ROOT, configFile: path.join(ROOT, 'vite.config.ts'), logLevel: 'error', preview: { port: 0, host: '127.0.0.1' } });
+    const addr = server.httpServer.address();
+    return { url: `http://127.0.0.1:${addr.port}/`, close: () => server.close() };
+  }
   const server = await createServer({
     root: ROOT,
     configFile: path.join(ROOT, 'vite.config.ts'),

@@ -86,6 +86,11 @@ export class TerrainShadows {
     globals.uShadowMap.value = this.shadow.texture;
   }
 
+  dispose(): void {
+    for (const h of this.heights) h.dispose();
+    this.shadow.dispose();
+  }
+
   /** Call once per frame with the camera position and the key light direction. */
   update(renderer: THREE.WebGLRenderer, camX: number, camZ: number, keyDir: THREE.Vector3): void {
     const texel = this.extent / this.size;

@@ -4,7 +4,7 @@ const args = Object.fromEntries(process.argv.slice(2).map((a) => a.replace(/^--/
 const server = await startServer();
 const { browser, page, problems } = await launch({ width: Number(args.w ?? 1920), height: Number(args.h ?? 1080) });
 for (const q of (args.q ?? 'high,medium,low').split(',')) {
-  await page.goto(`${server.url}?debug&q=${q}&t=${args.t ?? 'golden'}&cam=${args.cam ?? '-1500,120,1900,80,-2'}${args.extra ? '&' + args.extra : ''}`);
+  await page.goto(`${server.url}?debug&noui&nohud&q=${q}&t=${args.t ?? 'golden'}&cam=${args.cam ?? '-1500,120,1900,80,-2'}${args.extra ? '&' + args.extra : ''}`);
   await waitFrames(page, 3, 180000);
   await page.evaluate(() => window.__icarus.setAutoScale(false));
   const p = await page.evaluate(() => window.__icarus.profile(30));

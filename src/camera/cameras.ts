@@ -19,6 +19,16 @@ type ShotKind = 'flyby' | 'telephoto' | 'wing' | 'orbit' | 'tower' | 'low';
 
 const _v = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
+
+/**
+ * Vertical FOV for the screen: the modes are framed for landscape screens; on screens narrower than
+ * square (phones in portrait) the vertical FOV opens up to keep a square screen's horizontal view.
+ */
+export function screenFov(fov: number, aspect: number): number {
+  if (aspect >= 1) return fov;
+  const t = Math.tan(THREE.MathUtils.degToRad(fov) / 2) / aspect;
+  return Math.min(100, THREE.MathUtils.radToDeg(2 * Math.atan(t)));
+}
 const _q = new THREE.Quaternion();
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -36,6 +46,8 @@ export class CameraRig {
   private shotDur = 9;
   private readonly shotPos = new THREE.Vector3();
   private shotFov = 40;
+  /** vertical FOV as framed for a landscape screen (see screenFov) */
+  private fov = 60;
   private orbitAng = 0;
   private shotIndex = 0;
   /** smoothing for cinematic tracking */
@@ -86,6 +98,8 @@ export class CameraRig {
     if (this.mode === 'cockpit') this.cockpit(pose);
     else if (this.mode === 'chase') this.chase(dt, pose);
     else this.cinematic(dt, pose);
+    cam.fov = screenFov(this.fov, cam.aspect);
+    cam.updateProjectionMatrix();
     cam.updateMatrixWorld();
   }
 
@@ -121,9 +135,8 @@ export class CameraRig {
     cam.up.copy(this.chaseUp);
     const look = new THREE.Vector3().copy(pose.pos).addScaledVector(fwd, 6).addScaledVector(UP, 1.2);
     cam.lookAt(look);
-    cam.fov = THREE.MathUtils.lerp(cam.fov, 58 + Math.min(speed, 60) * 0.12, Math.min(1, dt * 2));
+    this.fov = THREE.MathUtils.lerp(this.fov, 58 + Math.min(speed, 60) * 0.12, Math.min(1, dt * 2));
     cam.near = 0.25;
-    cam.updateProjectionMatrix();
   }
 
   private cockpit(pose: Pose): void {
@@ -133,9 +146,8 @@ export class CameraRig {
     _q.setFromEuler(new THREE.Euler(this.lookPitch - 3 * DEG, this.lookYaw, 0, 'YXZ'));
     cam.quaternion.copy(pose.quat).multiply(_q);
     cam.up.set(0, 1, 0);
-    cam.fov = 72;
+    this.fov = 72;
     cam.near = 0.05;
-    cam.updateProjectionMatrix();
   }
 
   private pickShot(pose: Pose): void {
@@ -225,9 +237,8 @@ export class CameraRig {
       this.trackDir.lerp(want, Math.min(1, dt * 6)).normalize();
       cam.lookAt(_v2.copy(cam.position).add(this.trackDir));
     }
-    cam.fov = THREE.MathUtils.lerp(cam.fov, this.shotFov, Math.min(1, dt * 4));
-    if (this.shotTime < dt * 1.5) cam.fov = this.shotFov;
+    this.fov = THREE.MathUtils.lerp(this.fov, this.shotFov, Math.min(1, dt * 4));
+    if (this.shotTime < dt * 1.5) this.fov = this.shotFov;
     cam.near = 0.3;
-    cam.updateProjectionMatrix();
   }
 }

@@ -281,7 +281,7 @@ export class PlaneModel {
       vertexShader: /* glsl */ `out vec2 vP;
 #include <logdepthbuf_pars_vertex>
         void main() { vP = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        #include <logdepthbuf_vertex>
+        #include <icarus_logdepth_vertex>
         }`,
       fragmentShader: /* glsl */ `in vec2 vP; uniform float uAlpha; out vec4 fragColor;
 #include <logdepthbuf_pars_fragment>
@@ -371,6 +371,6 @@ export class PlaneModel {
     u.uLampOn.value = lampOn ? 1 : 0;
     this.cockpit.visible = cockpitView;
     this.material.side = cockpitView ? THREE.DoubleSide : THREE.FrontSide;
-    if (cockpitView) this.panel.update(tel, dt);
+    if (cockpitView) this.panel.update(tel);
   }
 }

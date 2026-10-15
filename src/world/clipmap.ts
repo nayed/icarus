@@ -59,8 +59,27 @@ export function morphFactor(px: number, pz: number, s: number, st: ClipState): n
 
 type HeightFn = (x: number, z: number, oct: number) => number;
 
+// Heights of lattice vertices, memoised: contact points query the same few vertices on every
+// physics substep. Direct-mapped and keyed on the exact arguments, so results are bit-identical.
+const CACHE_BITS = 12;
+const cacheX = new Float64Array(1 << CACHE_BITS).fill(NaN);
+const cacheZ = new Float64Array(1 << CACHE_BITS);
+const cacheO = new Int8Array(1 << CACHE_BITS);
+const cacheH = new Float64Array(1 << CACHE_BITS);
+
+export function latticeHeight(x: number, z: number, oct: number): number {
+  const k = (Math.imul(Math.round(x * 4) | 0, 0x9e3779b1) ^ Math.imul(Math.round(z * 4) | 0, 0x85ebca6b) ^ Math.imul(oct, 0x27d4eb2d)) >>> (32 - CACHE_BITS);
+  if (cacheX[k] === x && cacheZ[k] === z && cacheO[k] === oct) return cacheH[k];
+  const h = terrainHeight(x, z, oct);
+  cacheX[k] = x;
+  cacheZ[k] = z;
+  cacheO[k] = oct;
+  cacheH[k] = h;
+  return h;
+}
+
 /** Height of the lattice vertex at (px, pz) of a level with spacing s, after morphing. */
-export function vertexHeight(px: number, pz: number, s: number, st: ClipState, H: HeightFn = terrainHeight): number {
+export function vertexHeight(px: number, pz: number, s: number, st: ClipState, H: HeightFn = latticeHeight): number {
   const hf = H(px, pz, octavesForSpacing(s));
   const k = morphFactor(px, pz, s, st);
   if (k <= 0) return hf;
@@ -104,7 +123,7 @@ export interface SurfaceSample {
  * Height (and triangle normal) of the rendered clipmap surface at (x, z).
  * Each cell (i, j) is split along the diagonal from (i, j) to (i+1, j+1), matching the index buffer.
  */
-export function drawnSurface(x: number, z: number, st: ClipState, out: SurfaceSample, H: HeightFn = terrainHeight): SurfaceSample {
+export function drawnSurface(x: number, z: number, st: ClipState, out: SurfaceSample, H: HeightFn = latticeHeight): SurfaceSample {
   const L = levelAt(x, z, st);
   const s = levelSpacing(st.cfg, L);
   const ix = Math.floor(x / s);
@@ -139,7 +158,7 @@ export function drawnSurface(x: number, z: number, st: ClipState, out: SurfaceSa
 }
 
 const tmp: SurfaceSample = { h: 0, nx: 0, ny: 1, nz: 0, level: 0 };
-export function drawnHeight(x: number, z: number, st: ClipState, H: HeightFn = terrainHeight): number {
+export function drawnHeight(x: number, z: number, st: ClipState, H: HeightFn = latticeHeight): number {
   return drawnSurface(x, z, st, tmp, H).h;
 }
 

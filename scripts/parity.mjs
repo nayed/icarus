@@ -8,7 +8,7 @@ const server = await startServer();
 const { browser, page, problems } = await launch({ width: 640, height: 360 });
 let failed = false;
 for (const q of (process.argv[2] ?? 'high,low').split(',')) {
-  await page.goto(`${server.url}?debug&q=${q}&cam=3210.37,412.6,1987.21,70,-5`);
+  await page.goto(`${server.url}?debug&noui&nohud&q=${q}&cam=3210.37,412.6,1987.21,70,-5`);
   await waitFrames(page, 3, 180000);
   await page.evaluate(() => { window.__icarus.setAutoScale(false); window.__icarus.setPaused(true); });
   const res = await page.evaluate(() => {

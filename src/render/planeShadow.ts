@@ -27,7 +27,7 @@ export class PlaneShadow {
       vertexShader: /* glsl */ `out vec3 vW;
 #include <logdepthbuf_pars_vertex>
         void main() { vW = (modelMatrix * vec4(position, 1.0)).xyz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        #include <logdepthbuf_vertex>
+        #include <icarus_logdepth_vertex>
         }`,
       fragmentShader: /* glsl */ `in vec3 vW; uniform vec3 uOrigin; uniform vec3 uDir; out vec4 fragColor;
 #include <logdepthbuf_pars_fragment>

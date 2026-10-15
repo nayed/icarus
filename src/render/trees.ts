@@ -8,7 +8,7 @@ import { NOISE_GLSL } from '../world/noise.ts';
 import { CLOUD_COMMON_GLSL } from './clouds.ts';
 import { OUTPUT_GLSL } from './post.ts';
 
-const TILE = 192;
+const TILE = 128;
 
 const VERT = /* glsl */ `
 in vec4 aTree;   // x, y, z, height
@@ -78,7 +78,7 @@ void main() {
     vAlbedo = mix(pineCol, birchCol, birch);
   }
   gl_Position = projectionMatrix * (uViewRot * vec4(world - uCamPosF, 1.0));
-  #include <logdepthbuf_vertex>
+  #include <icarus_logdepth_vertex>
 }
 `;
 
@@ -150,7 +150,11 @@ export class Trees {
   private aTree2: THREE.InstancedBufferAttribute;
   private capacity: number;
   private dirty = true;
-  private lastKeys = '';
+  private pending = false;
+  private sinceRepack = 0;
+  private want: string[] = [];
+  private cx = NaN;
+  private cz = NaN;
   readonly uniforms = { uMaxDist: { value: 1500 } };
 
   constructor(maxTrees: number, private readonly radius: number, private readonly cell: number, ldr: boolean) {
@@ -178,64 +182,87 @@ export class Trees {
 
   /** Generates missing tiles near (x, z) within `budgetMs` and repacks when the set changes. */
   update(x: number, z: number, budgetMs = 2): void {
-    const R = Math.ceil(this.radius / TILE);
     const cx = Math.floor(x / TILE);
     const cz = Math.floor(z / TILE);
-    const want: [number, number, number][] = [];
-    for (let j = -R; j <= R; j++) {
-      for (let i = -R; i <= R; i++) {
-        const dx = Math.max(0, Math.abs(i) - 0.5) * TILE;
-        const dz = Math.max(0, Math.abs(j) - 0.5) * TILE;
-        const d = Math.hypot(dx, dz);
-        if (d <= this.radius) want.push([cx + i, cz + j, d]);
-      }
-    }
-    want.sort((a, b) => a[2] - b[2]);
-    const keys = new Set(want.map(([i, j]) => `${i},${j}`));
-    const t0 = performance.now();
-    for (const [i, j] of want) {
-      const k = `${i},${j}`;
-      if (this.tiles.has(k)) continue;
-      if (performance.now() - t0 > budgetMs) break;
-      this.tiles.set(k, makeTreeTile(i, j, TILE, this.cell));
+    if (cx !== this.cx || cz !== this.cz) {
+      this.cx = cx;
+      this.cz = cz;
+      this.want = this.wantedTiles(cx, cz);
+      const keys = new Set(this.want);
+      for (const k of this.tiles.keys()) if (!keys.has(k)) this.tiles.delete(k);
+      this.pending = true;
       this.dirty = true;
     }
-    for (const k of this.tiles.keys()) {
-      if (!keys.has(k)) {
-        this.tiles.delete(k);
+    if (this.pending) {
+      const t0 = performance.now();
+      let done = true;
+      for (const k of this.want) {
+        if (this.tiles.has(k)) continue;
+        if (performance.now() - t0 > budgetMs) {
+          done = false;
+          break;
+        }
+        const [i, j] = k.split(',').map(Number);
+        this.tiles.set(k, makeTreeTile(i, j, TILE, this.cell));
         this.dirty = true;
       }
+      this.pending = !done;
     }
-    const keyStr = [...keys].join(';');
-    if (keyStr !== this.lastKeys) {
-      this.lastKeys = keyStr;
-      this.dirty = true;
-    }
-    if (this.dirty) this.repack(keys);
+    // while tiles stream in, repack a few times a second rather than every frame
+    this.sinceRepack++;
+    if (this.dirty && (!this.pending || this.sinceRepack >= 12)) this.repack();
   }
 
-  /** Synchronously fills everything within `radius` (used while loading). */
-  prefill(x: number, z: number): void {
-    this.update(x, z, 1e9);
+  /** Tile keys within the radius, nearest first (the instance order: near trees draw first). */
+  private wantedTiles(cx: number, cz: number): string[] {
+    const R = Math.ceil(this.radius / TILE);
+    const want: [string, number][] = [];
+    for (let j = -R; j <= R; j++) {
+      for (let i = -R; i <= R; i++) {
+        const d = Math.hypot(Math.max(0, Math.abs(i) - 0.5) * TILE, Math.max(0, Math.abs(j) - 0.5) * TILE);
+        if (d <= this.radius) want.push([`${cx + i},${cz + j}`, d]);
+      }
+    }
+    want.sort((a, b) => a[1] - b[1]);
+    return want.map((w) => w[0]);
   }
 
-  private repack(keys: Set<string>): void {
+  /** Synchronously generates the tiles within `radius` of (x, z) (the rest keep streaming). */
+  prefill(x: number, z: number, radius = this.radius): void {
+    this.update(x, z, 0);
+    for (const k of this.want) {
+      if (this.tiles.has(k)) continue;
+      const [i, j] = k.split(',').map(Number);
+      // `want` is sorted by distance: stop at the first tile beyond the radius
+      const d = Math.hypot(Math.max(0, Math.abs(i - this.cx) - 0.5) * TILE, Math.max(0, Math.abs(j - this.cz) - 0.5) * TILE);
+      if (d > radius) break;
+      this.tiles.set(k, makeTreeTile(i, j, TILE, this.cell));
+    }
+    this.pending = this.want.some((k) => !this.tiles.has(k));
+    this.repack();
+  }
+
+  private repack(): void {
     this.dirty = false;
+    this.sinceRepack = 0;
     const a = this.aTree.array as Float32Array;
     const b = this.aTree2.array as Float32Array;
     let n = 0;
-    for (const k of keys) {
+    for (const k of this.want) {
       const t = this.tiles.get(k);
-      if (!t) continue;
-      for (let q = 0; q < t.count && n < this.capacity; q++, n++) {
-        const o = q * 8;
-        a.set(t.data.subarray(o, o + 4), n * 4);
-        b.set(t.data.subarray(o + 4, o + 8), n * 4);
-      }
+      if (!t || t.count === 0) continue;
+      const c = Math.min(t.count, this.capacity - n);
+      if (c <= 0) break;
+      a.set(c === t.count ? t.a : t.a.subarray(0, c * 4), n * 4);
+      b.set(c === t.count ? t.b : t.b.subarray(0, c * 4), n * 4);
+      n += c;
     }
     this.geometry.instanceCount = n;
-    this.aTree.needsUpdate = true;
-    this.aTree2.needsUpdate = true;
+    for (const attr of [this.aTree, this.aTree2]) {
+      attr.clearUpdateRanges();
+      attr.addUpdateRange(0, n * 4);
+      attr.needsUpdate = true;
+    }
   }
 
   get count(): number {

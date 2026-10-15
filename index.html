@@ -3,14 +3,26 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#0b0d11" />
-    <title>Icarus — Fjord Flight</title>
+    <meta name="theme-color" content="#07090c" />
+    <meta name="description" content="A calm, procedural flight simulator: a small amphibian over a far-north fjord at the edge of night." />
+    <title>Icarus · Fjord Flight</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;500;600;700&family=Barlow:wght@400;500;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Barlow:wght@400;500;600&display=swap"
     />
+    <style>
+      /* inlined so the loading screen paints before any script runs */
+      html, body { margin: 0; height: 100%; background: #07090c; }
+      .boot { position: fixed; inset: 0; display: grid; place-items: center; background: radial-gradient(80% 70% at 50% 45%, #10141b, #050608); color: #ece8e0; font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif; z-index: 20; transition: opacity 0.6s ease; }
+      .boot.gone { opacity: 0; pointer-events: none; }
+      .boot h1 { margin: 0; font-weight: 600; font-size: 56px; letter-spacing: 0.22em; text-align: center; padding-left: 0.22em; }
+      .boot .bar { width: 220px; height: 2px; margin: 26px auto 14px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden; }
+      .boot .bar i { display: block; height: 100%; width: 30%; background: #f2a24b; border-radius: 2px; animation: boot 1.4s cubic-bezier(.2,.7,.2,1) infinite; }
+      .boot p { margin: 0; text-align: center; font-family: 'Barlow', system-ui, sans-serif; font-size: 14px; color: rgba(236,232,224,0.6); letter-spacing: 0.02em; }
+      @keyframes boot { 0% { transform: translateX(-110%); } 100% { transform: translateX(340%); } }
+    </style>
   </head>
   <body>
     <div id="app">
@@ -18,6 +30,7 @@
       <canvas id="hud" aria-hidden="true"></canvas>
       <div id="ui"></div>
     </div>
+    <div class="boot" id="boot"><div><h1>ICARUS</h1><div class="bar"><i></i></div><p id="boot-msg">Raising the mountains…</p></div></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

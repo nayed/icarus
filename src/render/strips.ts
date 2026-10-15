@@ -22,7 +22,7 @@ void main() {
   gl_Position = projectionMatrix * (uViewRot * vec4(rel, 1.0));
   // ~0.35 m lamp, never smaller than a few pixels so it stays visible far away
   gl_PointSize = clamp(0.35 / max(d * uPixelAngle, 1e-4), 2.5, 14.0);
-  #include <logdepthbuf_vertex>
+  #include <icarus_logdepth_vertex>
 }
 `;
 const LIGHT_FRAG = /* glsl */ `

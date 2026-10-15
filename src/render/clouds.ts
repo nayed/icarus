@@ -81,14 +81,15 @@ float density(vec3 p, float cov, bool detail) {
   if (hf <= 0.0 || hf >= 1.0 || cov <= 0.0) return 0.0;
   vec3 drift = vec3(uCloudOffset.x, 0.0, uCloudOffset.y);
   vec3 uvw = (p + drift) * (1.0 / 4200.0);
-  float shape = texture(uNoise, uvw).r;
+  // two octaves of the shape noise: hides the facets of trilinear filtering at the cloud edges
+  float shape = texture(uNoise, uvw).r * 0.72 + texture(uNoise, uvw * 2.63 + vec3(0.37, 0.11, 0.71)).r * 0.28;
   float top = mix(0.45, 1.0, cov);
   float profile = smoothstep(0.0, 0.1, hf) * (1.0 - smoothstep(top * 0.6, top, hf));
   float d = (shape * profile - (1.0 - cov)) / max(cov, 0.05);
   if (d <= 0.0) return 0.0;
   if (detail) {
     float det = texture(uNoise, uvw * 4.7 + vec3(0.0, uTime * 0.002, 0.0)).g;
-    d -= det * 0.42 * (1.0 - d);
+    d -= det * 0.5 * (1.0 - d);
   }
   return max(d, 0.0);
 }
@@ -174,27 +175,72 @@ uniform sampler2D uDepth;
 uniform sampler2D uClouds;
 uniform sampler2D uDepthLow;
 uniform vec2 uLowSize;
+uniform mat4 uInvProj;
+uniform mat4 uCamWorld;
+uniform vec3 uCamFwd;
+uniform vec3 uCamPosF;
 in vec2 vUv;
 out vec4 fragColor;
+vec4 bsplineWeights(float v) {
+  vec4 n = vec4(1.0, 2.0, 3.0, 4.0) - v;
+  vec4 s = n * n * n;
+  float x = s.x;
+  float y = s.y - 4.0 * s.x;
+  float z = s.z - 4.0 * s.y + 6.0 * s.x;
+  return vec4(x, y, z, 6.0 - x - y - z) * (1.0 / 6.0);
+}
+/** Cubic B-spline filter from 4 bilinear fetches: no visible texel grid when magnifying 4x. */
+vec4 bicubic(sampler2D tex, vec2 uv, vec2 size) {
+  vec2 st = uv * size - 0.5;
+  vec2 f = fract(st);
+  st -= f;
+  vec4 xc = bsplineWeights(f.x);
+  vec4 yc = bsplineWeights(f.y);
+  vec4 c = st.xxyy + vec2(-0.5, 1.5).xyxy;
+  vec4 s = vec4(xc.xz + xc.yw, yc.xz + yc.yw);
+  vec4 o = (c + vec4(xc.yw, yc.yw) / s) / size.xxyy;
+  vec4 s0 = texture(tex, o.xz), s1 = texture(tex, o.yz), s2 = texture(tex, o.xw), s3 = texture(tex, o.yw);
+  float sx = s.x / (s.x + s.y);
+  float sy = s.z / (s.z + s.w);
+  return mix(mix(s3, s2, sx), mix(s1, s0, sx), sy);
+}
 void main() {
   vec3 scene = texture(uScene, vUv).rgb;
   float z = linearDepth(texture(uDepth, vUv).r);
-  // depth-aware upsample: weight the 4 nearest low-res texels by depth similarity
+  // anything closer than where its ray enters the cloud slab cannot be covered: keeps the low-res
+  // clouds from bleeding over foreground silhouettes (cockpit frame, the aircraft, near ridges)
+  vec4 v = uInvProj * vec4(vUv * 2.0 - 1.0, 1.0, 1.0);
+  vec3 rd = normalize((uCamWorld * vec4(v.xyz / v.w, 0.0)).xyz);
+  float y0 = uCamPosF.y;
+  float tEnter = 0.0;
+  if (y0 < ${CLOUD_BASE.toFixed(1)}) tEnter = rd.y > 1e-4 ? (${CLOUD_BASE.toFixed(1)} - y0) / rd.y : 1e12;
+  else if (y0 > ${CLOUD_TOP.toFixed(1)}) tEnter = rd.y < -1e-4 ? (${CLOUD_TOP.toFixed(1)} - y0) / rd.y : 1e12;
+  if (z / max(dot(rd, uCamFwd), 1e-3) < tEnter * 0.98) { fragColor = vec4(scene, 1.0); return; }
+  // depth-aware upsample: bilinear over the 4 nearest low-res texels, rejecting those across a depth
+  // discontinuity (smooth depth gradients must stay bilinear, or edges turn into stairs); if all
+  // four are rejected, take the one with the closest depth
   vec2 st = vUv * uLowSize - 0.5;
   vec2 f = fract(st);
   vec2 b = (floor(st) + 0.5) / uLowSize;
   vec4 acc = vec4(0.0);
   float wsum = 0.0;
+  vec4 nearest = vec4(0.0);
+  float best = 1e30;
+  float minKeep = 1.0;
   for (int j = 0; j < 2; j++) for (int i = 0; i < 2; i++) {
     vec2 uv = b + vec2(float(i), float(j)) / uLowSize;
     float zl = texture(uDepthLow, uv).r;
+    vec4 cl = texture(uClouds, uv);
     float bil = (i == 0 ? 1.0 - f.x : f.x) * (j == 0 ? 1.0 - f.y : f.y);
     float rel = abs(z - zl) / max(min(z, zl), 1.0);
-    float w = bil / (1e-3 + rel * 40.0) + 1e-6;
-    acc += texture(uClouds, uv) * w;
-    wsum += w;
+    float keep = exp(-rel * rel * 150.0);
+    minKeep = min(minKeep, keep);
+    acc += cl * bil * keep;
+    wsum += bil * keep;
+    if (rel < best) { best = rel; nearest = cl; }
   }
-  vec4 c = acc / wsum;
+  // continuous depth (the usual case): smooth cubic filter; across an edge: depth-aware bilinear
+  vec4 c = minKeep > 0.9 ? bicubic(uClouds, vUv, uLowSize) : (wsum > 1e-3 ? acc / wsum : nearest);
   fragColor = vec4(scene * (1.0 - c.a) + c.rgb, 1.0);
 }
 `;
@@ -359,7 +405,7 @@ export class Clouds {
     this.target.texture.minFilter = this.target.texture.magFilter = THREE.NearestFilter;
     this.output = rt();
     this.history = [rt(), rt()];
-    this.uniforms.uNoise.value = generateCloudNoise(64);
+    this.uniforms.uNoise.value = generateCloudNoise(96);
     this.uniforms.uDepthLow.value = this.depthLow.texture;
     this.uniforms.uClouds.value = this.target.texture;
     this.uniforms.uDiv.value = div;
@@ -369,6 +415,11 @@ export class Clouds {
     this.compPass = new FullscreenPass(passMaterial(COMPOSITE_FRAG, u));
     this.temporalPass = new FullscreenPass(passMaterial(TEMPORAL_FRAG, u));
     this.uniforms.uCurrent.value = this.target.texture;
+  }
+
+  dispose(): void {
+    for (const t of [this.depthLow, this.target, this.output, ...this.history]) t.dispose();
+    this.uniforms.uNoise.value?.dispose();
   }
 
   setSize(w: number, h: number): void {

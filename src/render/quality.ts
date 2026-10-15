@@ -42,46 +42,88 @@ export const PRESETS: Record<QualityName, QualityPreset> = {
 };
 
 /**
- * Adjusts a render scale to hold a target frame time. Uses a smoothed frame time with hysteresis:
- * drops quickly when over budget, climbs slowly when there is clear headroom.
+ * Adjusts a render scale to hold a target frame time, from a smoothed frame cost with hysteresis:
+ * drops quickly when over budget, climbs slowly when there is headroom.
+ *
+ * The cost is the measured GPU/CPU work of a frame when the browser exposes GPU timers. Otherwise
+ * only the interval between frames is known, and on a display synced at the target rate that never
+ * shows headroom: the scaler then probes one step up after a while at full rate, returns to where it
+ * was if the probe costs frames, and waits twice as long before the next try.
  */
 export class ResolutionScaler {
   scale = 1;
-  private avg = 16.7;
+  enabled = true;
+  /** probes tried so far (tests) */
+  probes = 0;
+  private avg: number;
   private overTime = 0;
   private underTime = 0;
-  enabled = true;
+  private steadyTime = 0;
+  /** seconds since the current probe stepped up (-1: no probe running) */
+  private probeAge = -1;
+  private probeFrom = 1;
+  private probeWait = 4;
+  /** seconds left in which frame times are ignored (shader compiles, terrain bakes after a reset) */
+  private holdTime = 2;
 
-  constructor(public min = 0.5, public max = 1, public targetMs = 16.7) {}
+  constructor(
+    public min = 0.5,
+    public max = 1,
+    public targetMs = 16.7,
+  ) {
+    this.avg = targetMs;
+  }
 
-  /** Returns true when the scale changed. */
-  update(frameMs: number, dt: number): boolean {
+  /**
+   * frameMs is the frame's work time when `measured`, else the interval since the previous frame.
+   * Returns true when the scale changed.
+   */
+  update(frameMs: number, dt: number, measured = false): boolean {
     if (!this.enabled) return false;
+    if (this.holdTime > 0) {
+      this.holdTime -= dt;
+      this.avg = this.targetMs;
+      return false;
+    }
     frameMs = Math.min(frameMs, 100);
     this.avg += (frameMs - this.avg) * Math.min(1, dt * 4);
-    if (this.avg > this.targetMs * 1.12) {
-      this.overTime += dt;
-      this.underTime = 0;
-    } else if (this.avg < this.targetMs * 0.8) {
-      this.underTime += dt;
-      this.overTime = 0;
-    } else {
-      this.overTime = 0;
-      this.underTime = 0;
-    }
+    const over = this.avg > this.targetMs * 1.12;
+    this.overTime = over ? this.overTime + dt : 0;
+    this.underTime = this.avg < this.targetMs * 0.8 ? this.underTime + dt : 0;
+    this.steadyTime = over ? 0 : this.steadyTime + dt;
+    if (this.probeAge >= 0) this.probeAge += dt;
     let next = this.scale;
     if (this.overTime > 0.75) {
-      next = Math.max(this.min, this.scale * 0.88);
       this.overTime = 0;
+      if (this.probeAge >= 0) {
+        // the probe cost frames: back to where it started, and wait longer before the next one
+        next = this.probeFrom;
+        this.probeWait = Math.min(this.probeWait * 2, 128);
+      } else next = this.scale * 0.88;
+      this.probeAge = -1;
+      this.steadyTime = 0;
     } else if (this.underTime > 3) {
-      next = Math.min(this.max, this.scale * 1.06);
+      next = this.scale * 1.06;
       this.underTime = 0;
+    } else if (!measured && this.probeAge < 0 && this.scale < this.max && this.steadyTime > this.probeWait) {
+      this.probeFrom = this.scale;
+      next = this.scale * 1.06;
+      this.probeAge = 0;
+      this.steadyTime = 0;
+      this.probes++;
     }
-    next = Math.round(next * 20) / 20;
+    if (this.probeAge > 3) this.probeAge = -1; // the probe held: keep it
+    next = Math.round(Math.min(this.max, Math.max(this.min, next)) * 20) / 20;
     if (next !== this.scale) {
       this.scale = next;
       return true;
     }
     return false;
+  }
+
+  /** Ignores the next `seconds` of frame times (expected hitches). */
+  hold(seconds: number): void {
+    this.holdTime = Math.max(this.holdTime, seconds);
+    this.overTime = 0;
   }
 }

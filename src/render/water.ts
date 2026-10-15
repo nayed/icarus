@@ -51,7 +51,7 @@ void main() {
   vLattice = p;
   vSpacing = s;
   gl_Position = projectionMatrix * (uViewRot * vec4(vWorld - uCamPosF, 1.0));
-  #include <logdepthbuf_vertex>
+  #include <icarus_logdepth_vertex>
 }
 `;
 

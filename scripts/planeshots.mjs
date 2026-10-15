@@ -1,4 +1,5 @@
-// Aircraft screenshots: start points × cameras × times. usage: node scripts/planeshots.mjs [--times=golden,night] [--prefix=p]
+// Aircraft screenshots: start points × cameras × times.
+// usage: node scripts/planeshots.mjs [--times=golden,night] [--prefix=p] [--q=high] [--w=1280 --h=720] [--hud] [--plans=air-chase,runway-cockpit]
 import { startServer, launch, waitFrames, shot, report } from './harness.mjs';
 
 const args = Object.fromEntries(process.argv.slice(2).map((a) => a.replace(/^--/, '').split('=')));
@@ -7,7 +8,7 @@ const TIMES = { dawn: 5.85, day: 12, golden: 16.55, dusk: 18.15, night: 22.6 };
 const prefix = args.prefix ?? 'p';
 const server = await startServer();
 const { browser, page, problems } = await launch({ width: Number(args.w ?? 1280), height: Number(args.h ?? 720) });
-await page.goto(`${server.url}?debug&q=${args.q ?? 'high'}&start=runway`);
+await page.goto(`${server.url}?debug&noui${'hud' in args ? '' : '&nohud'}&q=${args.q ?? 'high'}&start=runway`);
 await waitFrames(page, 3, 180000);
 await page.evaluate(() => window.__icarus.setAutoScale(false));
 const plans = [
@@ -18,8 +19,9 @@ const plans = [
   { name: 'air-cinematic', start: 'air', cam: 'cinematic', advance: 4, input: { throttle: 0.65 }, real: 1.5 },
   { name: 'water-chase', start: 'water', cam: 'chase', advance: 3, input: { throttle: 0.1 } },
 ];
+const only = args.plans ? args.plans.split(',') : null;
 for (const t of times) {
-  for (const p of plans) {
+  for (const p of plans.filter((p) => !only || only.includes(p.name))) {
     await page.evaluate(([p, t]) => {
       const api = window.__icarus;
       api.setTime(t);
