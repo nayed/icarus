@@ -47,7 +47,7 @@ live in NOTES.md; keep them current when behaviour changes.
 ## Workflow
 - After a change: typecheck, `npm test`, and the browser scripts that cover it. For anything visual,
   take screenshots with the scripts and look at them before calling it done.
-- Commit verified work on the `flight-sim` branch (`main` only holds the scaffold). Never push unless asked.
+- Work and commit directly on `main` (no feature branches). Never push unless asked.
 
 ## Design decisions to keep
 - UI: dark glass panels, Barlow Condensed for display type, Barlow for body text, and one accent:
