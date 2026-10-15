@@ -125,7 +125,8 @@ void paintRunway(inout vec3 col, inout float rough, vec2 p, vec4 A, vec2 RW, flo
   float inside = 1.0 - smoothstep(-aa, aa, max(q.x, q.y));
   if (inside <= 0.0) return;
   float grain = vnoise(p * 1.7, 701u) * 0.5 + vnoise(p * 0.21, 702u) * 0.5;
-  vec3 surf = paved > 0.5 ? vec3(0.045, 0.046, 0.05) * (0.85 + 0.25 * grain) : vec3(0.15, 0.13, 0.105) * (0.8 + 0.35 * grain);
+  // gravel is pale and dusty so the strip reads against the darker tundra from a long final
+  vec3 surf = paved > 0.5 ? vec3(0.045, 0.046, 0.05) * (0.85 + 0.25 * grain) : vec3(0.3, 0.275, 0.235) * (0.82 + 0.3 * grain);
   // tyre marks near the touchdown zones (paved only)
   float u = l.x;
   float v = l.y;
@@ -142,7 +143,10 @@ void paintRunway(inout vec3 col, inout float rough, vec2 p, vec4 A, vec2 RW, flo
   paint = max(paint, paved * (1.0 - smoothstep(0.4 - aa, 0.4 + aa, abs(abs(v) - (RW.y - 1.0)))));
   float aim = step(abs(fromEnd - 120.0), 22.0) * (1.0 - smoothstep(1.6 - aa, 1.6 + aa, abs(abs(v) - RW.y * 0.45)));
   paint = max(paint, aim);
-  paint *= mix(0.55, 1.0, paved) * (1.0 - 0.25 * grain);
+  // gravel: white edge markers, 6 m long every 40 m along both sides
+  float edgeMk = (1.0 - paved) * step(fract(u / 40.0), 0.15) * (1.0 - smoothstep(0.9 - aa, 0.9 + aa, abs(abs(v) - (RW.y - 1.2))));
+  paint = max(paint, edgeMk);
+  paint *= mix(0.9, 1.0, paved) * (1.0 - 0.25 * grain);
   // markings fade when smaller than a pixel to avoid shimmer
   paint *= 1.0 - smoothstep(0.6, 2.5, foot);
   surf = mix(surf, vec3(0.62, 0.62, 0.6), paint);

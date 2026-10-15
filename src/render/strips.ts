@@ -76,8 +76,8 @@ export class Strips {
         for (let a = -s.halfLength; a <= s.halfLength + 0.1; a += 70) {
           for (const side of [-1, 1]) {
             const [x, z] = at(a, side * (s.halfWidth + 3));
-            const cone = new THREE.ConeGeometry(0.35, 0.8, 8).translate(x, terrainHeight(x, z) + 0.4, z);
-            statics.push(paint(cone, (_x, y) => ({ c: Math.floor((y - terrainHeight(x, z)) / 0.27) % 2 ? '#f4f1ea' : '#f26a1b', m: MAT.paint })));
+            const cone = new THREE.ConeGeometry(0.5, 1.2, 10).translate(x, terrainHeight(x, z) + 0.6, z);
+            statics.push(paint(cone, (_x, y) => ({ c: Math.floor((y - terrainHeight(x, z)) / 0.4) % 2 ? '#f4f1ea' : '#f26a1b', m: MAT.paint })));
           }
         }
       }

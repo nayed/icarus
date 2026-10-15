@@ -30,8 +30,10 @@ function fuselage(): THREE.BufferGeometry {
   const S = (z: number, w: number, h: number, y: number, e: number) => ({ z, w, h, y, e });
   const g = loft(
     [
-      S(-4.5, 0.5, 0.5, 0.06, 2.1), S(-4.42, 0.58, 0.58, 0.06, 2.15), S(-4.25, 0.62, 0.62, 0.07, 2.2), S(-3.4, 0.64, 0.64, 0.08, 2.3),
-      S(-3.1, 0.64, 0.67, 0.12, 2.5), S(-2.75, 0.63, 0.78, 0.16, 2.9), S(-2.35, 0.64, 0.86, 0.17, 3.3), S(-0.9, 0.64, 0.86, 0.16, 3.3),
+      // the cowl droops towards the spinner and stays low ahead of the windshield: from the left seat
+      // the pilot sees ~10° below the nose, enough to keep the runway in view on final (nose ~5° up)
+      S(-4.5, 0.5, 0.5, -0.09, 2.1), S(-4.42, 0.58, 0.58, -0.09, 2.15), S(-4.25, 0.62, 0.6, -0.09, 2.2), S(-3.4, 0.64, 0.6, -0.015, 2.3),
+      S(-3.1, 0.64, 0.625, 0.075, 2.5), S(-2.75, 0.63, 0.78, 0.16, 2.9), S(-2.35, 0.64, 0.86, 0.17, 3.3), S(-0.9, 0.64, 0.86, 0.16, 3.3),
       S(0.6, 0.6, 0.8, 0.15, 3.0), S(1.6, 0.5, 0.66, 0.19, 2.8), S(3.0, 0.36, 0.48, 0.27, 2.5), S(4.6, 0.22, 0.33, 0.37, 2.3),
       S(5.9, 0.1, 0.18, 0.45, 2.2), S(6.18, 0.04, 0.07, 0.47, 2),
     ],
@@ -273,7 +275,7 @@ export class PlaneModel {
     const p = propeller();
     this.propBlades = mesh(p.blades);
     this.prop.add(this.propBlades, mesh(p.spinner));
-    this.prop.position.set(0, 0.08, -4.6);
+    this.prop.position.set(0, -0.07, -4.6);
     this.exterior.add(this.prop);
     const discMat = new THREE.ShaderMaterial({
       glslVersion: THREE.GLSL3,
@@ -302,7 +304,7 @@ export class PlaneModel {
       side: THREE.DoubleSide,
     });
     this.propDisc = new THREE.Mesh(new THREE.CircleGeometry(1.32, 48), discMat);
-    this.propDisc.position.set(0, 0.08, -4.66);
+    this.propDisc.position.set(0, -0.07, -4.66);
     this.propDisc.frustumCulled = false;
     this.propDisc.renderOrder = 600;
     this.exterior.add(this.propDisc);

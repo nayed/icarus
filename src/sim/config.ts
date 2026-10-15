@@ -95,7 +95,7 @@ export const AIRCRAFT = {
     { name: 'belly', pos: [0, -0.72, 0.6] as V3 },
   ],
   /** eye point for the cockpit camera */
-  eye: [-0.33, 0.8, -1.85] as V3,
+  eye: [-0.33, 0.9, -1.85] as V3,
   /** landing light in the left wing leading edge */
   lamp: [-2.4, 1.1, -1.05] as V3,
 };

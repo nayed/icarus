@@ -143,10 +143,11 @@ export class CameraRig {
     const cam = this.camera;
     _v.set(AIRCRAFT.eye[0], AIRCRAFT.eye[1], AIRCRAFT.eye[2]).applyQuaternion(pose.quat).add(pose.pos);
     cam.position.copy(_v);
-    _q.setFromEuler(new THREE.Euler(this.lookPitch - 3 * DEG, this.lookYaw, 0, 'YXZ'));
+    // looking a little down: the runway over the nose and both rows of instruments in view
+    _q.setFromEuler(new THREE.Euler(this.lookPitch - 6 * DEG, this.lookYaw, 0, 'YXZ'));
     cam.quaternion.copy(pose.quat).multiply(_q);
     cam.up.set(0, 1, 0);
-    this.fov = 72;
+    this.fov = 76;
     cam.near = 0.05;
   }
 

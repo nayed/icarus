@@ -134,7 +134,7 @@ await ev(() => {
 });
 for (let k = 0; k < 2000; k++) {
   await waitFrames(page, 1);
-  if ((await ev(() => window.__icarus.session.hud()?.landing?.dist ?? 1e9)) < 1500) break;
+  if ((await ev(() => window.__icarus.session.hud()?.landing?.dist ?? 1e9)) < 110) break;
 }
 await ev(() => window.__icarus.setFixedDt(1 / 60));
 await waitFrames(page, 20);
