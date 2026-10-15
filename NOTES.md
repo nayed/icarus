@@ -4,6 +4,11 @@ A calm, procedural flight simulator: a small amphibian over a far-north fjord at
 Three.js + TypeScript + Vite. No external models, textures or audio. The only downloads are the two
 Google Fonts (Barlow Condensed, Barlow), with condensed system fonts as fallback.
 
+## License
+MIT, see [LICENSE](LICENSE). Third-party code: three.js (MIT; its license header is kept in the built
+bundle). The Barlow and Barlow Condensed fonts (SIL Open Font License) load from Google Fonts and are
+not part of this repository.
+
 ## Run
 - `npm install`, then `npm run dev` (http://localhost:5173). `npm run build` / `npm run preview` for production.
 - `npm test`: vitest (pure TS: clipmap tiling and drawn-surface continuity, flat runways, water mirror,
