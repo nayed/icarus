@@ -51,8 +51,12 @@ async function fly(s, { pitch = null, bank = 0, heading = null, dt = 0.05 }) {
   const rates = prev ? { p: (s.pitch - prev.pitch) / dt, b: (s.bank - prev.bank) / dt } : { p: 0, b: 0 };
   prev = s;
   if (pitch !== null) await modulate((pitch - s.pitch) * 0.12 - rates.p * 0.06, 'KeyW', 'KeyS');
-  await modulate((bank - s.bank) * 0.06 - rates.b * 0.05, 'KeyA', 'KeyD');
-  if (heading !== null) await modulate((((heading - s.heading + 540) % 360) - 180) * 0.25, 'KeyQ', 'KeyE');
+  const hErr = heading === null ? 0 : (((heading - s.heading + 540) % 360) - 180);
+  // like a pilot: rudder steers on the ground, bank steers in the air
+  const onGround = s.wheelsOnGround > 0 || s.onWater;
+  const bankTarget = heading !== null && !onGround ? Math.max(-12, Math.min(12, hErr * 1.2)) : bank;
+  await modulate((bankTarget - s.bank) * 0.06 - rates.b * 0.05, 'KeyA', 'KeyD');
+  await modulate(onGround ? hErr * 0.12 : 0, 'KeyQ', 'KeyE');
 }
 
 for (const model of models) {

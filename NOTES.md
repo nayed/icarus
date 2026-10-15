@@ -38,9 +38,10 @@ Gear down for the strips, gear up for water (the aircraft is an amphibian).
 - `npm test`: 27 tests: clipmap tiling/continuity, flat runways, water mirror, and for each flight model:
   takeoff, rest on runway (< 1 mm drift), coastal + mountain + water landings, water takeoff, drop tests
   (never below the drawn surface beyond tyre compression), stall + recovery, gear-down water crash.
-- `node scripts/flight.mjs`: real key events in the browser. Arcade and Assisted pass all checks (keyboard
-  takeoff, stall protection, rendered autoland, rest jitter ≤ 0.2 mm). Simulation passes rest jitter but the
-  scripted keyboard pilot crashes it shortly after liftoff (torque/P-factor + crude test pilot): open issue.
+- `node scripts/flight.mjs`: real key events in the browser for all three models: rest on the runway
+  (≤ 0.2 mm drift in 10 s), keyboard takeoff and climb, stall (Simulation: warning before the break, then
+  recovery; Arcade/Assisted: protected), rendered autoland, rest after rollout, and the lowest contact point
+  never more than the tyre compression (~0.16 m) below the drawn surface.
 - Performance (Intel Lunar Lake iGPU, 1080p, `npm run perf`): before the aircraft/water were added,
   high ≈ 13–17 ms, medium ≈ 9 ms, low ≈ 5 ms; with water ≈ 21 / 15 / 9 ms. Not re-measured with the aircraft.
 
