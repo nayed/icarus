@@ -107,7 +107,8 @@ export class Hud {
     }
     if (i.mode) this.modeWidget(i.mode, small);
     if (i.mode?.landing && !small) this.landingGuide(i, cx, cy, spread, tapeH);
-    if (i.tel.stallWarning && Math.floor(this.blink * 3) % 2 === 0) this.text('STALL', cx, cy - tapeH * 0.42, 26, ALERT, 'center', 0.32);
+    const warning = i.tel.stallWarning ? 'STALL' : i.tel.overspeed ? 'OVERSPEED' : '';
+    if (warning && Math.floor(this.blink * 3) % 2 === 0) this.text(warning, cx, cy - tapeH * 0.42, 26, ALERT, 'center', 0.32);
     if (i.mode?.prompt) {
       const tone = i.mode.promptTone ?? 'info';
       const col = tone === 'warn' ? ALERT : INK;
@@ -180,7 +181,7 @@ export class Hud {
   }
 
   /** Vertical tape with values scrolling past a centre window. */
-  private tape(x: number, cy: number, h: number, value: number, unitPx: number, minor: number, major: number, label: (v: number) => string, side: 'left' | 'right', markers: { v: number; col: string; shape: 'chevron' | 'bug' }[]): void {
+  private tape(x: number, cy: number, h: number, value: number, unitPx: number, minor: number, major: number, label: (v: number) => string, side: 'left' | 'right', markers: { v: number; col: string; shape: 'chevron' | 'bug' | 'band' }[]): void {
     const c = this.ctx;
     const w = 64;
     const x0 = side === 'left' ? x - w : x;
@@ -221,6 +222,16 @@ export class Hud {
     c.globalAlpha = 1;
     for (const m of markers) {
       const y = cy - (m.v - value) * unitPx;
+      if (m.shape === 'band') {
+        // from the marker value up to the top of the tape, along its edge
+        const top = cy - h / 2;
+        const bottom = Math.min(y, cy + h / 2);
+        if (bottom > top) {
+          c.fillStyle = m.col;
+          c.fillRect(side === 'left' ? edge - 4 : edge, top, 4, bottom - top);
+        }
+        continue;
+      }
       if (Math.abs(y - cy) > h / 2) continue;
       c.fillStyle = m.col;
       c.beginPath();
@@ -280,7 +291,11 @@ export class Hud {
   private speedTape(i: HudInput, x: number, cy: number, h: number): void {
     const kt = i.tel.ias * 1.944;
     const stallKt = stallSpeedKt(i.tel.flaps);
-    const markers: { v: number; col: string; shape: 'chevron' | 'bug' }[] = [{ v: stallKt, col: `rgba(${ALERT_RGB},0.75)`, shape: 'chevron' }];
+    const markers: { v: number; col: string; shape: 'chevron' | 'bug' | 'band' }[] = [
+      { v: stallKt, col: `rgba(${ALERT_RGB},0.75)`, shape: 'chevron' },
+      // the red line: a band from the never-exceed speed upwards
+      { v: AIRCRAFT.vne * 1.944, col: `rgba(${ALERT_RGB},0.85)`, shape: 'band' },
+    ];
     if (i.mode?.landing) markers.push({ v: i.mode.landing.targetKt, col: ACC, shape: 'bug' });
     this.tape(x, cy, h, kt, 2.6, 5, 20, (v) => String(Math.max(0, v)), 'left', markers);
     this.window(x, cy, String(Math.max(0, Math.round(kt))), 'left', `GS ${Math.round(i.tel.groundSpeed * 1.944)}`);

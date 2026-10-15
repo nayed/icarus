@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { takeoff, restOnRunway, stall, approach, waterTakeoff, drop, WATER_LANE } from '../src/sim/scenarios.ts';
 import { STRIPS } from '../src/world/params.ts';
-import type { FlightModel } from '../src/sim/aircraft.ts';
+import { Aircraft, type FlightModel, type PilotInput } from '../src/sim/aircraft.ts';
+import { WorldEnv } from '../src/sim/environment.ts';
+import { idleInput } from '../src/sim/autopilot.ts';
+import { AIRCRAFT } from '../src/sim/config.ts';
 
 const MODELS: FlightModel[] = ['arcade', 'assisted', 'simulation'];
 
@@ -85,5 +88,69 @@ describe('simulation-only behaviour', () => {
   it('arcade model resists stalling', () => {
     const r = stall('arcade');
     expect(r.stalled).toBe(false);
+  });
+});
+
+describe('speed limits', () => {
+  // engine cut at 10 000 ft, a nose-down push held for `pushSec`, then hands off
+  const dive = (model: FlightModel, pushSec: number, seconds = 150, windFrom = 40, windSpeed = 4) => {
+    const env = new WorldEnv({ M: 128, levels: 11, s0: 1 });
+    env.setWind(windFrom, windSpeed);
+    const ac = new Aircraft();
+    ac.model = model;
+    ac.reset(-20000, 3048, 4000, 80, 46);
+    const inp: PilotInput = { ...idleInput(), throttle: 0, gearDown: false };
+    const DT = 1 / 120;
+    let maxIas = 0;
+    let warnedAt = -1;
+    let iasAtFailure = 0;
+    for (let i = 0; i < seconds / DT && !ac.crashed; i++) {
+      const t = i * DT;
+      inp.pitch = t >= 10 && t < 10 + pushSec ? -0.6 : 0;
+      env.follow(ac.pos.x, ac.pos.z);
+      ac.step(DT, inp, env);
+      const tel = ac.telemetry(env);
+      maxIas = Math.max(maxIas, tel.ias * 1.944);
+      if (tel.overspeed && warnedAt < 0) warnedAt = t;
+      if (ac.crashed) iasAtFailure = tel.ias * 1.944;
+    }
+    return { ac, maxIas, warnedAt, iasAtFailure, pitch: ac.pitchAngle };
+  };
+
+  it.each(['arcade', 'assisted'] as FlightModel[])('%s: a released dive recovers instead of building to an overspeed', (model) => {
+    const r = dive(model, 2);
+    expect(r.ac.crashed).toBe(false);
+    expect(r.maxIas).toBeLessThan(AIRCRAFT.vne * 1.944);
+    expect(r.pitch).toBeGreaterThan(-12);
+  });
+
+  it.each(['arcade', 'assisted'] as FlightModel[])('%s: holding the nose down stays near the red line, never breaks', (model) => {
+    const r = dive(model, 40);
+    expect(r.ac.crashed).toBe(false);
+    expect(r.maxIas).toBeLessThan(AIRCRAFT.vne * 1.944 + 8);
+  });
+
+  it('simulation: warns at the red line, breaks up at the indicated break-up speed', () => {
+    const r = dive('simulation', 60);
+    expect(r.ac.crashReason).toBe('overspeed: structural failure');
+    expect(r.warnedAt).toBeGreaterThan(0);
+    expect(r.iasAtFailure).toBeGreaterThan(AIRCRAFT.vBreak * 1.944 - 1);
+  });
+
+  it('a strong tailwind adds ground speed, not structural load', () => {
+    // 30 m/s wind from the west at altitude, flying east fast: ground speed well past 185 kt
+    const env = new WorldEnv({ M: 128, levels: 11, s0: 1 });
+    env.setWind(270, 30);
+    env.gustiness = 0;
+    const ac = new Aircraft();
+    ac.model = 'simulation';
+    ac.reset(-20000, 3048, 4000, 90, 100);
+    const inp: PilotInput = { ...idleInput(), throttle: 0.8, gearDown: false };
+    for (let i = 0; i < 240; i++) {
+      env.follow(ac.pos.x, ac.pos.z);
+      ac.step(1 / 120, inp, env);
+    }
+    expect(ac.vel.length()).toBeGreaterThan(95);
+    expect(ac.crashed).toBe(false);
   });
 });

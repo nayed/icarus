@@ -72,6 +72,8 @@ export interface Telemetry {
   wheelsOnGround: number;
   stallWarning: boolean;
   stalled: boolean;
+  /** indicated airspeed above the red line (vne) */
+  overspeed: boolean;
   crashed: boolean;
   crashReason: string;
   damage: string;
@@ -104,6 +106,7 @@ const _tFwd = new THREE.Vector3();
 const _p = new THREE.Vector3();
 const _vc = new THREE.Vector3();
 const _vr = new THREE.Vector3();
+const _vIas = new THREE.Vector3();
 const _cn = new THREE.Vector3();
 
 interface Contact {
@@ -142,6 +145,7 @@ export class Aircraft {
   damage = '';
   stalled = false;
   stallWarning = false;
+  overspeed = false;
   /** wing panel stall fraction (left, right) */
   stallL = 0;
   stallR = 0;
@@ -212,6 +216,7 @@ export class Aircraft {
     this.crashReason = '';
     this.damage = '';
     this.stalled = false;
+    this.overspeed = false;
     this.airborneTime = 0;
     this.lastTouchdown = null;
     this.throttle = speed > 1 ? 0.6 : 0;
@@ -270,6 +275,12 @@ export class Aircraft {
     const v = Math.max(this.vel.length(), 1);
     extraTorque.set(0, 0, 0);
     const stallLimit = (AIRCRAFT.surfaces[0].clmax / AIRCRAFT.surfaces[0].cla) + AIRCRAFT.surfaces[0].alpha0 - AIRCRAFT.surfaces[0].incidence + this.flaps * AIRCRAFT.flapStall;
+    // high-speed protection (arcade, assisted): 0 below ~136 kt, 1 at the red line
+    const vProt = AIRCRAFT.vne - 10;
+    const over = THREE.MathUtils.clamp((this.indicatedAirspeed() - vProt) / (AIRCRAFT.vne - vProt), 0, 1.5);
+    // a dive steeper than 12° nose down, with the stick released
+    const released = Math.abs(input.pitch) < 0.05 && !onGround;
+    const steep = released ? THREE.MathUtils.clamp((-this.pitchAngle - 12) / 10, 0, 1) : 0;
     if (m === 'arcade') {
       // rate command / attitude hold via assist torques; surfaces only add a little feel
       const I = AIRCRAFT.inertia;
@@ -277,6 +288,8 @@ export class Aircraft {
       let pitchRate = input.pitch * 0.7;
       // stall protection
       if (this.alpha > stallLimit - 3 * DEG) pitchRate = Math.min(pitchRate, -(this.alpha - (stallLimit - 3 * DEG)) * 3);
+      // high-speed protection and dive recovery: the nose comes up by itself
+      if (over + steep > 0) pitchRate = Math.max(pitchRate, (over + steep) * 0.25);
       const rollRate = input.roll !== 0 ? input.roll * 1.7 : -bank * 1.2;
       const yawRate = onGround ? input.yaw * 0.6 : (G * Math.tan(THREE.MathUtils.clamp(bank, -1.2, 1.2))) / v * Math.cos(bank) + input.yaw * 0.25;
       // desired body rates: pitch about +x, yaw about +y (left positive), roll about +z (left positive)
@@ -286,10 +299,14 @@ export class Aircraft {
       this.aileron = input.roll * 0.1;
       this.rudder = onGround ? input.yaw : THREE.MathUtils.clamp(this.beta * 2.5 + w.y * 0.4, -1, 1);
     } else if (m === 'assisted') {
-      // auto-trim holds the attitude when the stick is released
-      if (Math.abs(input.pitch) < 0.05 && !onGround) this.autoTrim = THREE.MathUtils.clamp(this.autoTrim - w.x * dt * 1.5, -0.6, 0.6);
+      // auto-trim holds the attitude when the stick is released, but not a dive: near the red line or
+      // beyond 12° nose down it trims the nose back up (a released stick never ends in an overspeed)
+      if (released) this.autoTrim = THREE.MathUtils.clamp(this.autoTrim - w.x * dt * 1.5, -0.6, 0.6);
+      if (released && over + steep > 0) this.autoTrim = THREE.MathUtils.clamp(this.autoTrim + (over + steep) * dt * 0.3, -0.6, 0.6);
       let elev = input.pitch + this.autoTrim + input.trim * 0.5;
       if (this.alpha > stallLimit - 2.5 * DEG) elev = Math.min(elev, -(this.alpha - (stallLimit - 2.5 * DEG)) * 6);
+      // high-speed protection: nose-down authority fades out towards the red line
+      if (over > 0) elev = Math.max(elev, over - 0.6);
       this.elevator = THREE.MathUtils.clamp(elev, -1, 1);
       const level = Math.abs(bank) < 35 * DEG && input.roll === 0 && !onGround;
       this.aileron = level ? THREE.MathUtils.clamp(-bank * 1.4 + w.z * 0.6, -0.6, 0.6) : input.roll;
@@ -455,10 +472,18 @@ export class Aircraft {
     return Math.max(env.surface(x, z, _surf).h, env.waterHeight(x, z, this.time));
   }
 
+  /** Indicated airspeed (m/s): airspeed scaled by air density, as the airspeed indicator shows it. */
+  indicatedAirspeed(): number {
+    return _vIas.copy(this.vel).sub(this.windV).length() * Math.sqrt(airDensity(this.pos.y) / 1.225);
+  }
+
   private checkStructure(): void {
     if (this.crashed) return;
-    const V = this.vel.length();
-    if (V > 95) this.crash('overspeed: structural failure');
+    // speed limits are indicated airspeed, like the red line on the airspeed indicator: not ground
+    // speed, which grows with altitude (thin air) and with a tailwind
+    const ias = this.indicatedAirspeed();
+    this.overspeed = ias > AIRCRAFT.vne && this.wheelsOnGround === 0;
+    if (ias > AIRCRAFT.vBreak) this.crash('overspeed: structural failure');
     const g = Math.abs(this.accel.y / G + 1);
     if (g > 7.5 && this.wheelsOnGround === 0) this.crash('over-g: structural failure');
   }
@@ -758,6 +783,7 @@ export class Aircraft {
     t.wheelsOnGround = this.wheelsOnGround;
     t.stallWarning = this.stallWarning;
     t.stalled = this.stalled;
+    t.overspeed = this.overspeed;
     t.crashed = this.crashed;
     t.crashReason = this.crashReason;
     t.damage = this.damage;

@@ -37,10 +37,10 @@ and its instrument panel, even the engine sound. There are no models, textures o
 - **An amphibian**: the wheels in the floats come down for the strips and go up for the water.
 - **A flight model** with lift and drag on each surface, stalls, ground effect, propeller torque, wind
   with gusts and crosswind, and wheels and floats that meet the actual ground and waves.
-- **Three flight models**: *Arcade* is forgiving, *Assisted* adds coordination, wing levelling and stall
-  protection to real aerodynamics, and *Simulation* leaves it all to you.
-- **Chase, cockpit and cinematic cameras**, and a HUD with airspeed, altitude, heading, vertical speed
-  and throttle.
+- **Three flight models**: *Arcade* is forgiving, *Assisted* adds coordination, wing levelling, and stall
+  and overspeed protection to real aerodynamics, and *Simulation* leaves it all to you.
+- **Chase, cockpit and cinematic cameras**, and a HUD with airspeed (knots), altitude (feet), heading,
+  vertical speed (feet per minute) and throttle, with stall and overspeed warnings.
 
 ![The cockpit at the end of the day, instruments lit](docs/screenshots/cockpit.jpg)
 

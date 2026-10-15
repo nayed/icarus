@@ -4,6 +4,7 @@ export interface AudioState {
   throttle: number;
   airspeed: number;
   stall: boolean;
+  overspeed: boolean;
   cockpit: boolean;
   onWater: boolean;
   groundSpeed: number;
@@ -25,6 +26,7 @@ export class SoundEngine {
   private rollGain!: GainNode;
   private rollFilter!: BiquadFilterNode;
   private stallGain!: GainNode;
+  private clackGain!: GainNode;
   private noise!: AudioBuffer;
   private cabin!: BiquadFilterNode;
   volume = 0.7;
@@ -154,6 +156,18 @@ export class SoundEngine {
     horn.connect(hf).connect(this.stallGain).connect(comp);
     horn.start();
 
+    // overspeed clacker: a slow square wave through a high-pass leaves a dry click on every edge
+    const clacker = ctx.createOscillator();
+    clacker.type = 'square';
+    clacker.frequency.value = 9;
+    const cf = ctx.createBiquadFilter();
+    cf.type = 'highpass';
+    cf.frequency.value = 1400;
+    this.clackGain = ctx.createGain();
+    this.clackGain.gain.value = 0;
+    clacker.connect(cf).connect(this.clackGain).connect(comp);
+    clacker.start();
+
     for (const o of [this.crank, this.fire, this.fire2, this.propLfo]) o.start();
     this.master.gain.setTargetAtTime(this.muted ? 0 : this.volume, ctx.currentTime, 0.3);
   }
@@ -192,6 +206,7 @@ export class SoundEngine {
     this.rollGain.gain.setTargetAtTime(roll * (s.onWater ? 0.35 : 0.22), t, 0.08);
     this.rollFilter.frequency.setTargetAtTime(s.onWater ? 900 : 180 + 200 * roll, t, 0.1);
     this.stallGain.gain.setTargetAtTime(s.stall ? 0.07 : 0, t, 0.03);
+    this.clackGain.gain.setTargetAtTime(s.overspeed ? 0.3 : 0, t, 0.03);
     this.cabin.frequency.setTargetAtTime(s.cockpit ? 2600 : 16000, t, 0.2);
   }
 

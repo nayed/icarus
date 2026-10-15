@@ -4,6 +4,7 @@
 // when a discrete state changes (flaps, gear, stall warning): no per-frame texture uploads.
 import * as THREE from 'three';
 import type { Telemetry } from '../sim/aircraft.ts';
+import { AIRCRAFT } from '../sim/config.ts';
 import { ATMOSPHERE_GLSL, SKYVIEW_SAMPLE_GLSL } from '../render/atmosphere.ts';
 import { GLOBALS_GLSL, globals } from '../render/globals.ts';
 import { OUTPUT_GLSL } from '../render/post.ts';
@@ -19,6 +20,8 @@ const RPM_R = 54;
 const A0 = -0.75 * Math.PI;
 const A1 = 0.75 * Math.PI;
 const FONT = '"Barlow Condensed", "Arial Narrow", sans-serif';
+/** red line of the airspeed indicator (kt) */
+const VNE_KT = Math.round(AIRCRAFT.vne * 1.944);
 
 const dialAngle = (v: number, lo: number, hi: number) => A0 + ((THREE.MathUtils.clamp(v, lo, hi) - lo) / (hi - lo)) * (A1 - A0);
 const vsiAngle = (fpm: number) => -Math.PI / 2 + (THREE.MathUtils.clamp(fpm, -2000, 2000) / 2000) * (Math.PI * 0.8);
@@ -166,7 +169,8 @@ export class InstrumentPanel {
     u.uAtt.value.set(t?.pitch ?? 0, (bank * Math.PI) / 180, (THREE.MathUtils.clamp(bank, -30, 30) * Math.PI) / 180, THREE.MathUtils.clamp(-(t?.beta ?? 0) * 2.2, -32, 32));
     u.uHdgRpm.value.set(((t?.heading ?? 0) * Math.PI) / 180, dialAngle((t?.rpm ?? 0) / 100, 0, 25));
     const gear = t?.gear ?? 1;
-    const key = `${t?.flapNotch ?? 0}|${gear > 0.98 ? 'down' : gear < 0.02 ? 'up' : 'transit'}|${t?.stallWarning ? 1 : 0}`;
+    const warning = t?.stallWarning ? 'STALL' : t?.overspeed ? 'OVERSPEED' : '';
+    const key = `${t?.flapNotch ?? 0}|${gear > 0.98 ? 'down' : gear < 0.02 ? 'up' : 'transit'}|${warning}`;
     if (key !== this.drawnKey) {
       this.drawnKey = key;
       this.draw(t);
@@ -186,8 +190,8 @@ export class InstrumentPanel {
     this.dial(COLS[0], ROWS[0], R, 'KNOTS', 0, 180, [
       [40, 100, '#e8e8e8'],
       [50, 140, '#3fbf5f'],
-      [140, 155, '#e3c13d'],
-    ], [155]);
+      [140, VNE_KT, '#e3c13d'],
+    ], [VNE_KT]);
     this.bezel(COLS[1], ROWS[0], R);
     this.altimeter(COLS[2], ROWS[0], R);
     this.turn(COLS[0], ROWS[1], R);
@@ -213,11 +217,14 @@ export class InstrumentPanel {
     c.fill();
     c.fillStyle = '#d8dadb';
     c.fillText(gear > 0.98 ? 'DOWN · LAND' : gear < 0.02 ? 'UP · WATER' : 'IN TRANSIT', 876, 172);
-    if (t?.stallWarning) {
+    const warning = t?.stallWarning ? 'STALL' : t?.overspeed ? 'OVERSPEED' : '';
+    if (warning) {
       c.fillStyle = '#e8473b';
       c.fillRect(840, 220, 150, 34);
       c.fillStyle = '#fff';
-      c.fillText('STALL', 885, 245);
+      c.textAlign = 'center';
+      c.fillText(warning, 915, 245);
+      c.textAlign = 'left';
     }
     c.fillStyle = '#5d6366';
     c.font = `500 16px ${FONT}`;

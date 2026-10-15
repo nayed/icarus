@@ -61,6 +61,12 @@ Menu: Enter flies; Esc on the results card goes back to the menu.
 - Arcade: rate-command attitude, protected stall. Assisted: real aerodynamics with auto-trim, turn
   coordination, wing leveller and stall protection. Simulation: raw aerodynamics with no protections
   (propeller torque, P-factor and adverse yaw are left for the pilot).
+- Units are aviation units: airspeed in knots, altitude in feet, vertical speed in feet per minute.
+- Speed limits are indicated airspeed (what the airspeed indicator shows; at altitude the true airspeed
+  is higher): the red line is 155 kt, and the airframe breaks up at 175 kt. Past the red line the HUD
+  and the panel show OVERSPEED and a clacker sounds. Arcade and Assisted protect the speed: from about
+  136 kt the nose comes up by itself and forward stick loses authority, and a dive steeper than 12°
+  eases out once the stick is released (Assisted's auto-trim would otherwise hold it).
 
 ## How the terrain stays identical on CPU and GPU
 - `src/world/noise.ts` and `terrain.ts` hold the TS function and its GLSL mirror side by side. The lattice

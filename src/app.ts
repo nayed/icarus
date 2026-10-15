@@ -440,6 +440,7 @@ export class App {
       throttle: this.ac.throttle,
       airspeed: this.telemetry.tas,
       stall: this.telemetry.stallWarning && flying,
+      overspeed: this.telemetry.overspeed && flying,
       cockpit,
       onWater: this.telemetry.onWater,
       onGround: this.telemetry.onGround,

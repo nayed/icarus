@@ -100,7 +100,7 @@ export class FreeFlight extends GameMode {
         success: false,
         metrics: [
           { label: 'Flight time', value: formatTime(this.app.simTime), score: 1 },
-          { label: 'Airspeed at impact', value: `${Math.round(this.app.telemetry.ias * 1.944)} kt`, score: 0 },
+          { label: ac.crashReason.includes('structural') ? 'Airspeed at break-up' : 'Airspeed at impact', value: `${Math.round(this.app.telemetry.ias * 1.944)} kt`, score: 0 },
         ],
       };
     }

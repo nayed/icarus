@@ -43,6 +43,10 @@ export const AIRCRAFT = {
   propPos: [0, 0.1, -4.55] as V3,
   maxRpm: 2200,
   idleRpm: 600,
+  /** never-exceed speed, indicated (m/s): the red line on the airspeed indicator, 155 kt */
+  vne: 79.7,
+  /** indicated airspeed at which the airframe breaks up (m/s), 175 kt */
+  vBreak: 90,
   surfaces: [
     {
       name: 'wingL', pos: [-3.7, 1.15, -0.12], span: [Math.cos(DIHEDRAL), -Math.sin(DIHEDRAL), 0], area: 11.6, aspect: 9.2,

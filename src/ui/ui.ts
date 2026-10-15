@@ -50,8 +50,8 @@ const MODE_INFO: Record<MenuMode, { t: string; d: () => string }> = {
   landing: { t: 'Mountain landing', d: () => 'A short gravel strip on a shelf 800 m up. Graded on the touchdown.' },
 };
 const MODEL_INFO: Record<FlightModel, string> = {
-  arcade: 'Rate controls, no stalls, forgiving touchdowns. Point and fly.',
-  assisted: 'Real aerodynamics, with auto-coordination, wing levelling and stall protection.',
+  arcade: 'Rate controls, protected stalls and speeds, forgiving touchdowns. Point and fly.',
+  assisted: 'Real aerodynamics, with auto-coordination, wing levelling, and stall and overspeed protection.',
   simulation: 'Raw controls: torque, P-factor, adverse yaw and spins. Use the rudder and trim.',
 };
 const TIME_LABEL: Record<TimePreset, string> = { dawn: 'Dawn', day: 'Day', golden: 'Golden', dusk: 'Dusk', night: 'Night' };
