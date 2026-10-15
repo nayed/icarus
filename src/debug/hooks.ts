@@ -12,6 +12,7 @@ import type { CameraMode } from '../camera/cameras.ts';
 import type { FlightModel, PilotInput } from '../sim/aircraft.ts';
 import * as scenarios from '../sim/scenarios.ts';
 import { SIM_DT } from '../sim/scenarios.ts';
+import { Autopilot } from '../sim/autopilot.ts';
 
 export interface ParityStats {
   count: number;
@@ -50,6 +51,63 @@ export function installDebugHooks(app: App): void {
     },
     setCameraMode(m: CameraMode) {
       app.setCameraMode(m);
+    },
+    /** Game sessions: 'free' | 'rings' | 'landing'. */
+    session: {
+      start(kind: 'free' | 'rings' | 'landing', start: StartPoint = 'runway', model?: FlightModel) {
+        if (model) {
+          app.settings.model = model;
+          app.applySettings();
+        }
+        app.startSession(kind, start);
+      },
+      hud: () => app.session?.hud() ?? null,
+      result: () => app.session?.result ?? null,
+      state: () => app.state,
+      gates: () => (app.session && 'gates' in app.session ? (app.session as unknown as { gates: unknown[] }).gates : null),
+      /** Fly the ring course with the autopilot (input override), gate by gate. */
+      autoRings(cutCorner = 0) {
+        const mode = app.session as unknown as { gates: { x: number; y: number; z: number; nx: number; nz: number }[]; next: number };
+        const ap = new Autopilot();
+        const inp = { ...app.controls.input, gearDown: false, flapNotch: 0 };
+        app.inputOverride = inp;
+        const hook = () => {
+          const g = mode.gates[Math.min(mode.next, mode.gates.length - 1)];
+          // line following onto the gate's axis (offset sideways by cutCorner to test misses)
+          const cx = g.x - g.nz * cutCorner;
+          const cz = g.z + g.nx * cutCorner;
+          const rx = app.ac.pos.x - cx;
+          const rz = app.ac.pos.z - cz;
+          const along = -(rx * g.nx + rz * g.nz);
+          const cross = rx * -g.nz + rz * g.nx; // + right of the line
+          const look = Math.max(140, along * 0.35);
+          const gateHdg = (Math.atan2(g.nx, -g.nz) * 180) / Math.PI;
+          const corr = THREE.MathUtils.clamp((Math.atan2(cross, look) * 180) / Math.PI, -65, 65);
+          const hdg = (gateHdg - corr + 720) % 360;
+          ap.update(app.ac, { heading: hdg, altitude: g.y, speed: 46, maxBank: 45 }, app.telemetry.ias, SIM_DT, inp);
+        };
+        app.onSimStep.push(hook);
+        return true;
+      },
+      /** Land on the mountain strip with the autopilot; `hard` drives it in with a high sink rate. */
+      autoLanding(hard = false) {
+        const c = new scenarios.ApproachController(STRIPS[1], false, 70);
+        const inp = { ...app.controls.input, flapNotch: 2, gearDown: true, brake: 0 };
+        app.inputOverride = inp;
+        const prevTd = app.ac.onTouchdown;
+        app.ac.onTouchdown = (t) => {
+          prevTd?.(t);
+          c.onTouchdown(t);
+        };
+        app.onSimStep.push(() => {
+          c.update(app.ac, app.env, inp, SIM_DT);
+          if (hard && c.phase === 'flare') {
+            inp.pitch = -0.15;
+            inp.throttle = 0;
+          }
+        });
+        return true;
+      },
     },
     flight: {
       start(p: StartPoint, model?: FlightModel) {

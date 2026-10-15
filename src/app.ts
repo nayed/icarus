@@ -19,6 +19,8 @@ import { globals } from './render/globals.ts';
 import { drawnHeight, makeClipState } from './world/clipmap.ts';
 import { AIRCRAFT } from './sim/config.ts';
 import { STRIPS, SEA_LEVEL } from './world/params.ts';
+import { createMode, type GameMode, type ModeKind } from './game/modes.ts';
+import type { ModeResult } from './game/grading.ts';
 
 export type StartPoint = 'runway' | 'water' | 'air' | 'mountain-approach' | 'rings';
 
@@ -48,7 +50,7 @@ export class App {
   readonly shadow = new PlaneShadow(512);
   readonly audio = new SoundEngine();
   state: AppState = 'flying';
-  settings: FlightSettings = { model: 'assisted', timeOfDay: TIME_PRESETS.dusk, timeFlow: 0.5, windFrom: 250, windSpeed: 4, clouds: 0.45, volume: 0.7 };
+  settings: FlightSettings = { model: 'assisted', timeOfDay: TIME_PRESETS.dusk, timeFlow: 0.5, windFrom: 40, windSpeed: 4, clouds: 0.45, volume: 0.7 };
   lampOn = false;
   hudVisible = true;
   /** when set, replaces keyboard input (tests) */
@@ -67,7 +69,13 @@ export class App {
   private readonly drawPos = new THREE.Vector3();
   private readonly drawQuat = new THREE.Quaternion();
   private mouseDown = false;
-  /** observers (game modes, HUD) */
+  /** current game mode */
+  session: GameMode | null = null;
+  sessionKind: ModeKind = 'free';
+  sessionStart: StartPoint = 'runway';
+  /** called once when a session produces its result */
+  onResult: ((r: ModeResult) => void) | null = null;
+  /** observers (HUD) */
   onFrame: ((dt: number) => void)[] = [];
   onSimStep: ((dt: number) => void)[] = [];
   onActionHooks: ((a: Action) => void)[] = [];
@@ -122,7 +130,7 @@ export class App {
       const c = cam.split(',').map(Number);
       this.setFreeCamera(c[0], c[1], c[2], c[3], c[4], c[5] ?? 60);
     }
-    this.startFlight((q.get('start') as StartPoint) ?? 'runway');
+    this.startSession((q.get('mode') as ModeKind) ?? 'free', (q.get('start') as StartPoint) ?? 'runway');
     if (q.has('debug')) installDebugHooks(this);
     requestAnimationFrame(this.loop);
   }
@@ -175,10 +183,27 @@ export class App {
     this.acc = 0;
     this.simTime = 0;
     ac.time = 0;
+    ac.crashed = false;
     ac.engineOn = true;
     this.lampOn = this.isDark();
     this.rig.snap();
     this.recentreSurface();
+  }
+
+  /** Starts (or restarts) a game mode. */
+  startSession(kind: ModeKind, start: StartPoint = this.sessionStart): void {
+    this.session?.end();
+    this.inputOverride = null;
+    this.sessionKind = kind;
+    this.sessionStart = start;
+    this.ac.onTouchdown = null;
+    this.session = createMode(this, kind, start);
+    this.session.begin();
+    this.state = 'flying';
+  }
+
+  restartSession(): void {
+    this.startSession(this.sessionKind, this.sessionStart);
   }
 
   /** Resets interpolation and clocks after the aircraft was placed externally. */
@@ -186,6 +211,9 @@ export class App {
     this.prevPos.copy(this.ac.pos);
     this.prevQuat.copy(this.ac.q);
     this.acc = 0;
+    this.simTime = 0;
+    this.ac.time = 0;
+    this.lampOn = this.isDark();
     this.ac.model = this.settings.model;
     this.state = 'flying';
     this.rig.snap();
@@ -245,6 +273,7 @@ export class App {
     const input = this.inputOverride ?? this.controls.input;
     this.ac.step(SIM_DT, input, this.env);
     this.simTime += SIM_DT;
+    this.session?.simStep(SIM_DT);
     for (const f of this.onSimStep) f(SIM_DT);
   }
 
@@ -287,6 +316,11 @@ export class App {
     const ld = new THREE.Vector3(0, -0.07, -1).normalize().applyQuaternion(this.drawQuat);
     globals.uLampDir.value.set(ld.x, ld.y, ld.z, Math.cos(THREE.MathUtils.degToRad(13)));
 
+    this.session?.frame(dt);
+    if (flying && this.session?.result) {
+      this.state = 'results';
+      this.onResult?.(this.session.result);
+    }
     for (const f of this.onFrame) f(dt);
     this.world.render(dt);
     this.strips.update(this.env.baseWind, globals.uExposure.value, this.simTime, this.isDark() ? 1 : 0.2);

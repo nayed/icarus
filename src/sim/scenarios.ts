@@ -151,10 +151,15 @@ export class ApproachController {
   private readonly ap = new Autopilot();
   private readonly gs = (3.5 * Math.PI) / 180;
 
-  constructor(readonly strip: StripLike, readonly water = false) {
+  readonly strip: StripLike;
+  readonly water: boolean;
+
+  constructor(strip: StripLike, water = false, aimDist = 120) {
+    this.strip = strip;
+    this.water = water;
     this.d = headingDir(strip.heading);
     this.thr = [strip.center[0] - this.d[0] * strip.halfLength, strip.center[1] - this.d[1] * strip.halfLength];
-    this.aim = [this.thr[0] + this.d[0] * 120, this.thr[1] + this.d[1] * 120];
+    this.aim = [this.thr[0] + this.d[0] * aimDist, this.thr[1] + this.d[1] * aimDist];
   }
 
   /** Initial state `dist` metres before the aim point, on the glide path. */
@@ -181,7 +186,7 @@ export class ApproachController {
     const hdg = s.heading - clamp(across * 0.6, -25, 25);
     if (this.phase === 'approach') {
       const hTgt = s.elevation + 2.5 + Math.max(-along, 0) * Math.tan(this.gs);
-      this.ap.update(ac, { heading: hdg, vs: -31 * Math.sin(this.gs) + (hTgt - ac.pos.y) * 0.25, speed: 31, maxBank: 15 }, t.ias, dt, inp);
+      this.ap.update(ac, { heading: hdg, vs: -31 * Math.sin(this.gs) + clamp((hTgt - ac.pos.y) * 0.25, -3, 3), speed: 31, maxBank: 15 }, t.ias, dt, inp);
       if (t.agl < 9) this.phase = 'flare';
     } else if (this.phase === 'flare') {
       this.ap.update(ac, { heading: hdg, vs: -1, speed: 0, throttle: 0, maxBank: 8 }, t.ias, dt, inp);
@@ -194,7 +199,8 @@ export class ApproachController {
       inp.roll = clamp(-t.bank * 0.05, -1, 1);
       inp.brake = this.water ? 0 : ts > 2 ? 1 : 0;
       inp.pitch = clamp(((ts < 3 ? 4 - ts * 1.5 : -1) - t.pitch) * 0.1 - ac.omega.x * 0.8, -1, 1);
-      inp.yaw = clamp(-across * 0.2 + (((s.heading - t.heading + 540) % 360) - 180) * 0.05, -1, 1);
+      // keep straight: centreline + heading, with yaw-rate damping so the rollout never swerves
+      inp.yaw = clamp(-across * 0.15 + (((s.heading - t.heading + 540) % 360) - 180) * 0.04 + ac.omega.y * 1.5, -1, 1);
     }
   }
 

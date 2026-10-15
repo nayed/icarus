@@ -35,7 +35,7 @@ export class WorldEnv implements SimEnv {
 
   constructor(cfg: ClipmapConfig) {
     this.clip = makeClipState(cfg, 0, 0);
-    this.setWind(250, 4);
+    this.setWind(40, 4);
   }
 
   /** Wind from `fromDeg` (meteorological) at `speed` m/s. */

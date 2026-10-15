@@ -40,7 +40,8 @@ export class InstrumentPanel {
           // dim daylight on the panel + warm instrument lighting that matters at night
           // daylight through the windshield + warm instrument lighting (always readable)
           vec3 light = envDiffuse(vec3(0.0, 0.5, -1.0)) * 1.1 + uSunColor * max(uSunDir.y, 0.0) * 0.12;
-          vec3 glow = vec3(1.0, 0.82, 0.62) * 0.09 * max(1.0, uExposure * 0.0015);
+          // instrument backlight: always on, and relatively brighter as the scene gets darker
+          vec3 glow = vec3(1.0, 0.8, 0.6) * (0.1 + 0.5 * smoothstep(20.0, 400.0, uExposure)) * max(1.0, uExposure * 0.0012);
           fragColor = finalOutput(t.rgb * (light + glow));
         }`,
     });
