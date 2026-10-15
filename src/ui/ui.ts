@@ -116,7 +116,10 @@ export class UI {
           </div>
           <div class="menu-actions">
             <button class="btn primary fly" data-act="fly">Fly <span class="kbd">Enter</span></button>
-            <div class="menu-foot"><button class="linkish" data-act="controls">Controls</button><span>Procedural · no assets</span></div>
+            <div class="menu-foot">
+              <div class="foot-links"><button class="linkish" data-act="controls">Controls</button><button class="linkish" data-act="fullscreen">Fullscreen</button></div>
+              <span>Procedural · no assets</span>
+            </div>
           </div>
         </div>
         <div class="controls-sheet glass hidden" data-sheet>
@@ -168,7 +171,19 @@ export class UI {
     this.bindSliders();
     root.addEventListener('click', (e) => this.onClick(e));
     addEventListener('keydown', (e) => this.onKey(e));
+    document.addEventListener('fullscreenchange', () => this.syncFullscreen());
+    this.syncFullscreen();
     void this.caption;
+  }
+
+  /** Fullscreen buttons (menu and pause) follow the state, and hide where fullscreen is unavailable. */
+  private syncFullscreen(): void {
+    const on = !!document.fullscreenElement;
+    for (const b of this.root.querySelectorAll<HTMLButtonElement>('[data-act="fullscreen"]')) {
+      b.hidden = !document.fullscreenEnabled;
+      b.textContent = on ? 'Exit fullscreen' : 'Fullscreen';
+      b.title = `${on ? 'Exit fullscreen' : 'Fullscreen'} (${actionLabel('fullscreen')})`;
+    }
   }
 
   // ---------------------------------------------------------------- menu

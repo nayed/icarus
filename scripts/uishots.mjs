@@ -17,6 +17,15 @@ for (const [w, h, tag] of [[1920, 1080, 'desktop'], [390, 844, 'phone']]) {
   check(state === 'menu', `${tag}: boots into the menu (state ${state})`);
   await shot(page, `ui-${tag}-menu`);
   if (tag === 'desktop') {
+    const fsState = () => page.evaluate(() => ({ on: !!document.fullscreenElement, label: document.querySelector('.menu-foot [data-act="fullscreen"]').textContent }));
+    await page.click('.menu-foot [data-act="fullscreen"]');
+    await sleep(500);
+    const fs1 = await fsState();
+    check(fs1.on && fs1.label === 'Exit fullscreen', `menu Fullscreen button enters fullscreen (label now "${fs1.label}")`);
+    await page.click('.menu-foot [data-act="fullscreen"]');
+    await sleep(500);
+    const fs2 = await fsState();
+    check(!fs2.on && fs2.label === 'Fullscreen', `pressing it again leaves fullscreen (label "${fs2.label}")`);
     await page.click('text=Controls');
     await sleep(500);
     await shot(page, `ui-${tag}-controls`);
