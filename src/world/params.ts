@@ -57,8 +57,9 @@ export interface StripDef {
   halfLength: number;
   halfWidth: number;
   elevation: number;
-  /** flattened pad around the runway (margin beyond the runway rectangle) */
-  padMargin: number;
+  /** flattened pad beyond the runway rectangle: along the runway axis and across it */
+  padLong: number;
+  padLat: number;
   /** distance over which the pad blends back to natural terrain */
   shoulder: number;
 }
@@ -67,12 +68,12 @@ export const STRIPS: StripDef[] = [
   {
     id: 'coastal', name: 'Vika coastal strip',
     center: [600, 6250], heading: 45, halfLength: 450, halfWidth: 13,
-    elevation: 20, padMargin: 70, shoulder: 420,
+    elevation: 20, padLong: 90, padLat: 70, shoulder: 420,
   },
   {
     id: 'mountain', name: 'Hestskar mountain strip',
     center: [5550, 350], heading: 60, halfLength: 210, halfWidth: 9,
-    elevation: 798, padMargin: 45, shoulder: 300,
+    elevation: 798, padLong: 190, padLat: 45, shoulder: 300,
   },
 ];
 
@@ -112,7 +113,7 @@ export function worldGlsl(): string {
     const d = headingDir(s.heading);
     lines.push(`const vec4 STRIP${i}_A = vec4(${f(s.center[0])}, ${f(s.center[1])}, ${f(d[0])}, ${f(d[1])});`);
     lines.push(
-      `const vec4 STRIP${i}_B = vec4(${f(s.halfLength + s.padMargin)}, ${f(s.halfWidth + s.padMargin)}, ${f(s.elevation)}, ${f(s.shoulder)});`,
+      `const vec4 STRIP${i}_B = vec4(${f(s.halfLength + s.padLong)}, ${f(s.halfWidth + s.padLat)}, ${f(s.elevation)}, ${f(s.shoulder)});`,
     );
     lines.push(`const vec2 STRIP${i}_RW = vec2(${f(s.halfLength)}, ${f(s.halfWidth)});`);
   });

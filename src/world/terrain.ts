@@ -172,7 +172,7 @@ export function terrainHeight(x: number, z: number, oct: number = TERRAIN_OCTAVE
     for (let i = 0; i < STRIPS.length; i++) {
       const s = STRIPS[i];
       const dir = STRIP_DIRS[i];
-      const sd = boxSdf(x, z, s.center[0], s.center[1], dir[0], dir[1], s.halfLength + s.padMargin, s.halfWidth + s.padMargin);
+      const sd = boxSdf(x, z, s.center[0], s.center[1], dir[0], dir[1], s.halfLength + s.padLong, s.halfWidth + s.padLat);
       const k = 1 - smoothstep(0, s.shoulder, sd);
       h = k >= 1 ? s.elevation : mix(h, s.elevation, k);
     }

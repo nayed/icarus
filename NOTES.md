@@ -21,5 +21,31 @@ Procedural fjord flight simulator (Three.js + TypeScript + Vite). No external mo
 - Parity (iGPU, fp32 vs fp64): function ≤ 4 mm worldwide; rasterised surface vs CPU ≤ 0.2 mm near the
   camera, ≤ 3 mm out to ±30 km.
 
-## Status
-Stage 1 (terrain, sky, clouds, shadows, forests, HDR post) done. Next: water.
+## Controls (physical keys; labels follow your layout)
+W/S or ↑/↓ pitch · A/D or ←/→ roll · Q/E rudder · R/F throttle · Space brakes · G gear · X/Z flaps down/up ·
+T/Y trim · C camera (1 chase, 2 cockpit, 3 cinematic) · L landing light · H HUD · K fullscreen · drag mouse to look.
+Gear down for the strips, gear up for water (the aircraft is an amphibian).
+
+## Status (work in progress)
+- Done: stage 1 (terrain, sky, clouds, shadows, forests, HDR post), stage 2 (water), most of stage 3
+  (6DOF flight model with 3 models, wheel/float contacts, crash detection, procedural aircraft + cockpit
+  panel, chase/cockpit/cinematic cameras, aircraft shadow, strip lights/windsocks, procedural audio).
+- Not done yet: stage 4 (ring run, mountain-landing grading), stage 5 (main menu, pause/settings overlay,
+  canvas HUD, results card, LDR/no-WebGL2 fallback checks, final sweep). The app currently starts straight
+  into free flight on the coastal strip (`?start=runway|water|air`, `?model=arcade|assisted|simulation`).
+
+## Verification so far
+- `npm test`: 27 tests: clipmap tiling/continuity, flat runways, water mirror, and for each flight model:
+  takeoff, rest on runway (< 1 mm drift), coastal + mountain + water landings, water takeoff, drop tests
+  (never below the drawn surface beyond tyre compression), stall + recovery, gear-down water crash.
+- `node scripts/flight.mjs`: real key events in the browser. Arcade and Assisted pass all checks (keyboard
+  takeoff, stall protection, rendered autoland, rest jitter ≤ 0.2 mm). Simulation passes rest jitter but the
+  scripted keyboard pilot crashes it shortly after liftoff (torque/P-factor + crude test pilot): open issue.
+- Performance (Intel Lunar Lake iGPU, 1080p, `npm run perf`): before the aircraft/water were added,
+  high ≈ 13–17 ms, medium ≈ 9 ms, low ≈ 5 ms; with water ≈ 21 / 15 / 9 ms. Not re-measured with the aircraft.
+
+## Known limitations
+- Water collision uses the analytic Gerstner surface; the drawn water mesh drops short waves on far LOD
+  levels, so far from the camera they can differ by a few cm.
+- The drawn terrain depends on the camera (clipmap LOD). Deep penetrations caused by camera cuts or
+  teleports are resolved by moving the aircraft up without adding energy.

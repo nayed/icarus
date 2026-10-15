@@ -6,7 +6,12 @@ import { drawnHeight, vertexHeight, octavesForSpacing } from '../world/clipmap.t
 import { terrainVertexShader, terrainPrefix } from '../render/terrainMesh.ts';
 import { globals } from '../render/globals.ts';
 import { FullscreenPass, passMaterial } from '../render/fullscreen.ts';
-import { TERRAIN_OCTAVES } from '../world/params.ts';
+import { TERRAIN_OCTAVES, STRIPS } from '../world/params.ts';
+import type { StartPoint, FlightSettings } from '../app.ts';
+import type { CameraMode } from '../camera/cameras.ts';
+import type { FlightModel, PilotInput } from '../sim/aircraft.ts';
+import * as scenarios from '../sim/scenarios.ts';
+import { SIM_DT } from '../sim/scenarios.ts';
 
 export interface ParityStats {
   count: number;
@@ -17,6 +22,8 @@ export interface ParityStats {
 
 export function installDebugHooks(app: App): void {
   const w = app.world;
+  let autolandHook: ((dt: number) => void) | null = null;
+  let autoland: scenarios.ApproachController | null = null;
   const overrides = new Map<string, number | number[] | null>();
   w.onBeforeRender = () => {
     for (const [k, v] of overrides) {
@@ -35,10 +42,88 @@ export function installDebugHooks(app: App): void {
     },
     caps: app.caps,
     setTime(h: number) {
+      app.settings.timeOfDay = h;
       w.timeOfDay = h;
     },
     setCamera(x: number, y: number, z: number, yaw: number, pitch: number, fov = 60) {
-      app.setCamera(x, y, z, yaw, pitch, fov);
+      app.setFreeCamera(x, y, z, yaw, pitch, fov);
+    },
+    setCameraMode(m: CameraMode) {
+      app.setCameraMode(m);
+    },
+    flight: {
+      start(p: StartPoint, model?: FlightModel) {
+        if (model) {
+          app.settings.model = model;
+          app.applySettings();
+        }
+        app.startFlight(p);
+        app.state = 'flying';
+      },
+      settings(s: Partial<FlightSettings>) {
+        Object.assign(app.settings, s);
+        app.applySettings();
+      },
+      /** Override the pilot input (null = back to the keyboard). */
+      input(i: Partial<PilotInput> | null) {
+        if (i === null) app.inputOverride = null;
+        else app.inputOverride = { ...(app.inputOverride ?? { ...app.controls.input }), ...i };
+      },
+      keyboardInput: () => ({ ...app.controls.input }),
+      state() {
+        const t = app.telemetry;
+        return { ...t, x: app.ac.pos.x, y: app.ac.pos.y, z: app.ac.pos.z, time: app.simTime, model: app.ac.model, lamp: app.lampOn, camera: app.rig.mode };
+      },
+      /** Synchronously advance the live simulation (no rendering). */
+      advance(seconds: number) {
+        const n = Math.round(seconds / SIM_DT);
+        for (let i = 0; i < n; i++) app.stepSim();
+        return this.state();
+      },
+      /** Runs a headless scripted scenario in the page (same code as the unit tests). */
+      scenario(name: string, model: FlightModel) {
+        const S = scenarios as unknown as Record<string, (...a: unknown[]) => unknown>;
+        if (name === 'landCoastal') return scenarios.approach(model, STRIPS[0]);
+        if (name === 'landMountain') return scenarios.approach(model, STRIPS[1]);
+        if (name === 'landWater') return scenarios.approach(model, scenarios.WATER_LANE, 2000, true);
+        return S[name](model);
+      },
+      /** Live autoland onto 'coastal' | 'mountain' | 'water' (renders while flying); null cancels. */
+      autoland(where: 'coastal' | 'mountain' | 'water' | null, dist = 2500) {
+        if (autolandHook) {
+          const i = app.onSimStep.indexOf(autolandHook);
+          if (i >= 0) app.onSimStep.splice(i, 1);
+          autolandHook = null;
+        }
+        if (!where) {
+          app.inputOverride = null;
+          return null;
+        }
+        const strip = where === 'water' ? scenarios.WATER_LANE : STRIPS[where === 'coastal' ? 0 : 1];
+        const c = new scenarios.ApproachController(strip, where === 'water');
+        c.place(app.ac, dist);
+        app.startFlightAt();
+        const inp = { ...app.controls.input, flapNotch: 2, gearDown: where !== 'water', brake: 0 };
+        app.inputOverride = inp;
+        app.ac.onTouchdown = (t) => c.onTouchdown(t);
+        autolandHook = () => c.update(app.ac, app.env, inp, SIM_DT);
+        app.onSimStep.push(autolandHook);
+        autoland = c;
+        return true;
+      },
+      autolandResult: () => (autoland ? autoland.result(app.ac, app.env) : null),
+      autolandPhase: () => autoland?.phase ?? null,
+      /** Records the drawn-surface clearance and drift of the live aircraft over `seconds` (real frames). */
+      surfaceProbe() {
+        const pts: [number, number, number][] = [[-1.3, -2.47, 0.45], [1.3, -2.47, 0.45], [-1.3, -2.37, -3.3], [1.3, -2.37, -3.3], [-1.3, -2.16, -0.9], [1.3, -2.16, -0.9]];
+        const P = new THREE.Vector3();
+        let min = 1e9;
+        for (const p of pts) {
+          app.ac.toWorld(p, P);
+          min = Math.min(min, P.y - drawnHeight(P.x, P.z, w.clip));
+        }
+        return { minClearance: min, x: app.ac.pos.x, y: app.ac.pos.y, z: app.ac.pos.z, qx: app.ac.q.x, qy: app.ac.q.y, qz: app.ac.q.z, qw: app.ac.q.w };
+      },
     },
     setPaused(p: boolean) {
       app.paused = p;

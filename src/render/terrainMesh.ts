@@ -216,7 +216,7 @@ void main() {
 STRIP_PAINT
 
   // ---- lighting
-  float tsh = terrainShadow(P);
+  float tsh = terrainShadow(P) * planeShadow(P);
   float shSun = mix(1.0, tsh, uKeyIsSun) * cloudShadowAt(P, uSunDir);
   float shMoon = mix(tsh, 1.0, uKeyIsSun) * cloudShadowAt(P, uMoonDir);
   float shadow = shSun;

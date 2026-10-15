@@ -42,6 +42,11 @@ export const globals = {
   uAmbientBoost: { value: 1 },
   /** 1 while rendering the planar water reflection (underwater geometry is discarded) */
   uReflectPass: { value: 0 },
+  /** aircraft shadow map (see PlaneShadow) */
+  uPlaneShadowMap: { value: null as THREE.Texture | null },
+  uPlaneShadowMat: { value: new THREE.Matrix4() },
+  uPlaneShadowCenter: { value: new THREE.Vector3() },
+  uPlaneShadowOn: { value: 0 },
 };
 
 export type Globals = typeof globals;
@@ -78,6 +83,10 @@ uniform vec4 uShadowOrigin;
 uniform float uKeyIsSun;
 uniform float uAmbientBoost;
 uniform float uReflectPass;
+uniform sampler2D uPlaneShadowMap;
+uniform mat4 uPlaneShadowMat;
+uniform vec3 uPlaneShadowCenter;
+uniform float uPlaneShadowOn;
 
 float saturate(float x) { return clamp(x, 0.0, 1.0); }
 vec3 saturate(vec3 x) { return clamp(x, 0.0, 1.0); }
@@ -129,6 +138,20 @@ float terrainShadow(vec3 P) {
   float fade = smoothstep(0.0, 0.06, min(e.x, e.y));
   if (fade <= 0.0) return 1.0;
   return mix(1.0, texture(uShadowMap, uv).r, fade);
+}
+
+/** Shadow cast by the aircraft (1 = lit). */
+float planeShadow(vec3 P) {
+  if (uPlaneShadowOn < 0.5) return 1.0;
+  vec3 q = (uPlaneShadowMat * vec4(P - uPlaneShadowCenter, 1.0)).xyz;
+  if (q.x <= 0.0 || q.y <= 0.0 || q.x >= 1.0 || q.y >= 1.0) return 1.0;
+  vec2 ts = 1.0 / vec2(textureSize(uPlaneShadowMap, 0));
+  float s = 0.0;
+  for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+    float d = texture(uPlaneShadowMap, q.xy + vec2(float(i), float(j)) * ts * 1.5).r;
+    s += q.z > d + 0.12 ? 0.0 : 1.0;
+  }
+  return mix(0.15, 1.0, s / 9.0);
 }
 
 /** Landing light contribution (pre-exposed irradiance) at P with normal N. */

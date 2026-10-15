@@ -41,6 +41,10 @@ export class WorldRenderer {
   pixelRatio = 1;
   /** debug hook: runs after lighting is computed, before drawing */
   onBeforeRender: (() => void) | null = null;
+  /** app hook: runs right before the main scene is drawn (e.g. aircraft shadow map) */
+  onBeforeScene: ((r: THREE.WebGLRenderer) => void) | null = null;
+  /** time used for the sea surface (the flight model's clock, so physics and visuals agree) */
+  waveTime = 0;
   /** debug: when set, each pass is GPU-synced and timed into this map */
   profile: Map<string, number> | null = null;
   private profT = 0;
@@ -249,11 +253,12 @@ export class WorldRenderer {
     this.terrain.update(r, cam.position.x, cam.position.z);
     this.mark('terrainBake');
     this.trees.update(cam.position.x, cam.position.z, 1.5);
-    this.water.update(cam.position.x, cam.position.z, g.uTime.value);
+    this.water.update(cam.position.x, cam.position.z, this.waveTime);
     this.renderReflection(cam);
     this.mark('reflection');
     this.clip = makeClipState(this.terrain.cfg, cam.position.x, cam.position.z);
 
+    this.onBeforeScene?.(r);
     r.setRenderTarget(this.post.scene);
     r.clear(true, true, false);
     r.render(this.scene, cam);

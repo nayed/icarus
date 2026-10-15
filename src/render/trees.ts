@@ -92,7 +92,7 @@ out vec4 fragColor;
 void main() {
   #include <logdepthbuf_fragment>
   vec3 N = normalize(vNormal);
-  float tsh = terrainShadow(vWorld);
+  float tsh = terrainShadow(vWorld) * planeShadow(vWorld);
   float shSun = mix(1.0, tsh, uKeyIsSun) * cloudShadowAt(vWorld, uSunDir);
   float shMoon = mix(tsh, 1.0, uKeyIsSun) * cloudShadowAt(vWorld, uMoonDir);
   float ws = (dot(N, uSunDir) + 0.35) / 1.35;

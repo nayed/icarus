@@ -144,7 +144,7 @@ void main() {
   float T = Tw.g;
 
   // lighting
-  float tsh = terrainShadow(P);
+  float tsh = terrainShadow(P) * planeShadow(P);
   float shSun = mix(1.0, tsh, uKeyIsSun) * cloudShadowAt(P, uSunDir);
   float shMoon = mix(tsh, 1.0, uKeyIsSun) * cloudShadowAt(P, uMoonDir);
   float NdV = max(dot(N, V), 0.0);
