@@ -5,6 +5,9 @@
 <p align="center"><b>A calm, procedural flight simulator for the browser.</b><br>
 A small amphibious bush plane over a far-north fjord, at the edge of night.</p>
 
+<p align="center"><a href="https://nayed.github.io/icarus/"><b>Play it in your browser</b></a> (WebGL2 and a keyboard)
+&nbsp;·&nbsp; <a href="https://github.com/nayed/icarus/actions/workflows/ci.yml"><img src="https://github.com/nayed/icarus/actions/workflows/ci.yml/badge.svg" alt="CI status" align="absmiddle"></a></p>
+
 Icarus is a flight you take for the view, not for a score. You fly a bush plane through a fjord at
 69.6° N in late September, when the days end in a long twilight and the aurora comes out at night.
 
@@ -96,6 +99,10 @@ modes, the menu flow, fallbacks, performance) run in headless Chromium through P
 [NOTES.md](NOTES.md) for those commands and the technical notes: how the terrain stays identical on CPU
 and GPU, what has been verified, and known limitations. `node scripts/readme-shots.mjs` regenerates the
 screenshots in this README.
+
+Every push to `main` runs [GitHub Actions](.github/workflows/ci.yml): typecheck, unit tests, build, and
+a smoke test that boots the built game in headless Chromium with software WebGL and fails on any shader
+or console error. When all of that passes, the site is deployed to GitHub Pages.
 
 ## License
 

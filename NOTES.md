@@ -22,6 +22,12 @@ not part of this repository.
   - `node scripts/fallbacks.mjs`: no WebGL2, no float render targets, logarithmic depth
   - `npm run shots`, `node scripts/planeshots.mjs`: screenshot matrices (`shots/`, git-ignored)
   - `node scripts/readme-shots.mjs`: regenerates the README screenshots in `docs/screenshots/`
+  - `npm run smoke`: boots the game in the three pipelines (default, `nofloat`, `logdepth`) through the
+    menu, a flight, the cockpit and the ring run, failing on any console or shader error. CI runs it on
+    the build with software WebGL: `ICARUS_PROD=1 ICARUS_GPU=swiftshader npm run smoke`
+- CI (`.github/workflows/ci.yml`, on pushes to `main` and pull requests): typecheck, unit tests, build,
+  smoke test; on `main` it then deploys `dist/` to GitHub Pages (https://nayed.github.io/icarus/).
+  The heavier browser checks need a real GPU and stay local.
   - `npm run perf`: GPU time (timer queries), main-thread time and frame interval per preset and view
 - URL flags: `?q=low|medium|high`, `?t=dawn|day|golden|dusk|night|<hours>`, `?mode=free|rings|landing`
   with `&start=runway|water|air` (skips the menu), `?model=arcade|assisted|simulation`, `?noui`, `?nohud`,

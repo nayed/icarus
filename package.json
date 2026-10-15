@@ -12,7 +12,8 @@
     "parity": "node scripts/parity.mjs",
     "shots": "node scripts/shots.mjs",
     "perf": "node scripts/perf.mjs",
-    "profile": "node scripts/profile.mjs"
+    "profile": "node scripts/profile.mjs",
+    "smoke": "node scripts/smoke.mjs"
   },
   "type": "module",
   "private": true,

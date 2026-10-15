@@ -21,6 +21,7 @@ live in NOTES.md; keep them current when behaviour changes.
   - `node scripts/uishots.mjs`: menu → flight → pause → results flow, desktop and phone
   - `node scripts/fallbacks.mjs`: `?force=nowebgl2|nofloat|logdepth`
   - `npm run perf`: GPU time from timer queries, main-thread time, frame interval
+  - `npm run smoke`: what CI runs in the browser (all three pipelines, fails on console/shader errors)
   - `npm run shots`, `node scripts/planeshots.mjs [--hud]`: screenshots into `shots/` (git-ignored)
   - `node scripts/readme-shots.mjs`: the README screenshots in `docs/screenshots/` (repeatable: fixed
     time steps). Rerun it after visible changes and look at the results before committing them.
@@ -50,6 +51,9 @@ live in NOTES.md; keep them current when behaviour changes.
 - After a change: typecheck, `npm test`, and the browser scripts that cover it. For anything visual,
   take screenshots with the scripts and look at them before calling it done.
 - Work and commit directly on `main` (no feature branches). Never push unless asked.
+- CI (`.github/workflows/ci.yml`) runs typecheck, unit tests, build and the smoke test on every push
+  to `main`, then deploys the build to GitHub Pages. Keep `base: './'` in `vite.config.ts`: the site
+  is served under `/icarus/`.
 
 ## Design decisions to keep
 - UI: dark glass panels, Barlow Condensed for display type, Barlow for body text, and one accent:
