@@ -5,7 +5,11 @@ import type { Telemetry } from '../sim/aircraft.ts';
 import type { ModeHud } from '../game/modes.ts';
 import { AIRCRAFT } from '../sim/config.ts';
 
-const ACC = '#f2a24b';
+const ACC = '#7fdcc0';
+const ACC_RGB = '127,220,192';
+/** cautions and warnings stay warm so they stand out from the cool accent */
+const ALERT = '#f2a24b';
+const ALERT_RGB = '242,162,75';
 const INK = 'rgba(236,232,224,0.9)';
 const MUTED = 'rgba(236,232,224,0.55)';
 const FAINT = 'rgba(236,232,224,0.22)';
@@ -103,10 +107,10 @@ export class Hud {
     }
     if (i.mode) this.modeWidget(i.mode, small);
     if (i.mode?.landing && !small) this.landingGuide(i, cx, cy, spread, tapeH);
-    if (i.tel.stallWarning && Math.floor(this.blink * 3) % 2 === 0) this.text('STALL', cx, cy - tapeH * 0.42, 26, ACC, 'center', 0.32);
+    if (i.tel.stallWarning && Math.floor(this.blink * 3) % 2 === 0) this.text('STALL', cx, cy - tapeH * 0.42, 26, ALERT, 'center', 0.32);
     if (i.mode?.prompt) {
       const tone = i.mode.promptTone ?? 'info';
-      const col = tone === 'warn' ? ACC : INK;
+      const col = tone === 'warn' ? ALERT : INK;
       const a = tone === 'warn' ? 0.65 + 0.35 * Math.sin(this.blink * 9) : 1;
       c.globalAlpha = a;
       const py = cockpit ? cy + tapeH * 0.62 : H - (small ? 156 : 86);
@@ -129,6 +133,12 @@ export class Hud {
     c.fillText(s, x, y);
     c.shadowBlur = 0;
     (c as unknown as { letterSpacing: string }).letterSpacing = '0px';
+  }
+
+  /** Soft dark halo behind the next strokes/fills (symbols over bright sky, snow or water). */
+  private halo(on: boolean): void {
+    this.ctx.shadowColor = 'rgba(0,0,0,0.55)';
+    this.ctx.shadowBlur = on ? 5 : 0;
   }
 
   /** Centred text that wraps onto two balanced lines when it is wider than `maxW`. */
@@ -270,7 +280,7 @@ export class Hud {
   private speedTape(i: HudInput, x: number, cy: number, h: number): void {
     const kt = i.tel.ias * 1.944;
     const stallKt = stallSpeedKt(i.tel.flaps);
-    const markers: { v: number; col: string; shape: 'chevron' | 'bug' }[] = [{ v: stallKt, col: 'rgba(242,162,75,0.75)', shape: 'chevron' }];
+    const markers: { v: number; col: string; shape: 'chevron' | 'bug' }[] = [{ v: stallKt, col: `rgba(${ALERT_RGB},0.75)`, shape: 'chevron' }];
     if (i.mode?.landing) markers.push({ v: i.mode.landing.targetKt, col: ACC, shape: 'bug' });
     this.tape(x, cy, h, kt, 2.6, 5, 20, (v) => String(Math.max(0, v)), 'left', markers);
     this.window(x, cy, String(Math.max(0, Math.round(kt))), 'left', `GS ${Math.round(i.tel.groundSpeed * 1.944)}`);
@@ -299,7 +309,7 @@ export class Hud {
     }
     c.stroke();
     const k = Math.sign(fpm) * Math.min(1, Math.sqrt(Math.abs(fpm) / 2000));
-    c.strokeStyle = Math.abs(fpm) > 1200 && fpm < 0 && i.tel.agl < 150 ? ACC : INK;
+    c.strokeStyle = Math.abs(fpm) > 1200 && fpm < 0 && i.tel.agl < 150 ? ALERT : INK;
     c.lineWidth = 3;
     c.beginPath();
     c.moveTo(vx, cy);
@@ -411,10 +421,10 @@ export class Hud {
     let x = cx - total / 2;
     items.forEach(([s, hot], k) => {
       const w = widths[k];
-      c.fillStyle = hot ? 'rgba(242,162,75,0.16)' : PANEL;
+      c.fillStyle = hot ? `rgba(${ACC_RGB},0.16)` : PANEL;
       this.roundRect(x, y - 12, w, 24, 12);
       c.fill();
-      c.strokeStyle = hot ? 'rgba(242,162,75,0.6)' : 'rgba(255,255,255,0.1)';
+      c.strokeStyle = hot ? `rgba(${ACC_RGB},0.6)` : 'rgba(255,255,255,0.1)';
       c.lineWidth = 1;
       c.stroke();
       this.text(s, x + w / 2, y + 1, 12.5, hot ? ACC : INK, 'center', 0.16);
@@ -445,7 +455,9 @@ export class Hud {
     c.lineTo(s.x + 17, s.y);
     c.moveTo(s.x, s.y - 7);
     c.lineTo(s.x, s.y - 13);
+    this.halo(true);
     c.stroke();
+    this.halo(false);
   }
 
   private horizon(i: HudInput, cx: number, cy: number): void {
@@ -463,7 +475,7 @@ export class Hud {
       const a = this.project(center.clone().addScaledVector(right, -half), cam);
       const b = this.project(center.clone().addScaledVector(right, half), cam);
       if (a.behind || b.behind) continue;
-      c.strokeStyle = pitch === 0 ? 'rgba(242,162,75,0.55)' : 'rgba(236,232,224,0.28)';
+      c.strokeStyle = pitch === 0 ? `rgba(${ACC_RGB},0.55)` : 'rgba(236,232,224,0.28)';
       c.setLineDash(pitch < 0 ? [6, 6] : []);
       c.beginPath();
       if (pitch === 0) {
@@ -508,7 +520,9 @@ export class Hud {
         c.lineTo(s.x + sx * r, s.y + sy * r);
         c.lineTo(s.x + sx * (r - 7), s.y + sy * r);
       }
+      this.halo(true);
       c.stroke();
+      this.halo(false);
       this.text(t.label, s.x, s.y - r - 12, 15, ACC, 'center', 0.1);
       this.text(dist, s.x, s.y + r + 12, 12, INK, 'center', 0.12);
     } else {
@@ -536,7 +550,9 @@ export class Hud {
       c.lineTo(-2, 0);
       c.lineTo(-6, 10);
       c.closePath();
+      this.halo(true);
       c.fill();
+      this.halo(false);
       c.restore();
       this.text(`${t.label} · ${dist}`, px - Math.cos(ang) * 34, py - Math.sin(ang) * 26, 12.5, INK, 'center', 0.12);
     }
@@ -567,7 +583,9 @@ export class Hud {
     c.lineTo(gx, gy + 7);
     c.lineTo(gx - 6, gy);
     c.closePath();
+    this.halo(true);
     c.fill();
+    this.halo(false);
     // centreline: horizontal scale below the centre (±40 m)
     const ly = cy + tapeH * 0.5 + 10;
     const lw = 110;
@@ -589,7 +607,9 @@ export class Hud {
     c.lineTo(lx + 7, ly);
     c.lineTo(lx, ly + 6);
     c.closePath();
+    this.halo(true);
     c.fill();
+    this.halo(false);
     const d = l.dist > 950 ? `${(l.dist / 1000).toFixed(1)} KM` : `${Math.max(0, Math.round(l.dist))} M`;
     this.text(`THRESHOLD ${d}`, cx, ly + 22, 12.5, INK, 'center', 0.16);
   }
