@@ -22,6 +22,8 @@ live in NOTES.md; keep them current when behaviour changes.
   - `node scripts/fallbacks.mjs`: `?force=nowebgl2|nofloat|logdepth`
   - `npm run perf`: GPU time from timer queries, main-thread time, frame interval
   - `npm run shots`, `node scripts/planeshots.mjs [--hud]`: screenshots into `shots/` (git-ignored)
+  - `node scripts/readme-shots.mjs`: the README screenshots in `docs/screenshots/` (repeatable: fixed
+    time steps). Rerun it after visible changes and look at the results before committing them.
 - `ICARUS_GPU=egl` (default: real GPU through ANGLE, set up on Linux) or `swiftshader` (software, slow; use
   it if WebGL fails headless on another OS). `ICARUS_PROD=1` runs the scripts against `dist/` (build first).
 - Scratch experiments go in `scripts/scratch/` (git-ignored).

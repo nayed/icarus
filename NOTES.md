@@ -21,6 +21,7 @@ not part of this repository.
   - `node scripts/uishots.mjs`: menu → flight → pause → results flow, desktop and phone
   - `node scripts/fallbacks.mjs`: no WebGL2, no float render targets, logarithmic depth
   - `npm run shots`, `node scripts/planeshots.mjs`: screenshot matrices (`shots/`, git-ignored)
+  - `node scripts/readme-shots.mjs`: regenerates the README screenshots in `docs/screenshots/`
   - `npm run perf`: GPU time (timer queries), main-thread time and frame interval per preset and view
 - URL flags: `?q=low|medium|high`, `?t=dawn|day|golden|dusk|night|<hours>`, `?mode=free|rings|landing`
   with `&start=runway|water|air` (skips the menu), `?model=arcade|assisted|simulation`, `?noui`, `?nohud`,
