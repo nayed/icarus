@@ -152,6 +152,7 @@ void paintRunway(inout vec3 col, inout float rough, vec2 p, vec4 A, vec2 RW, flo
 
 void main() {
   #include <logdepthbuf_fragment>
+  if (uReflectPass > 0.5 && vWorld.y < SEA_LEVEL - 0.3) discard;
   vec3 P = vWorld;
   vec3 cam = uCamPosF;
   vec3 V = P - cam;
@@ -302,6 +303,7 @@ export class TerrainMesh {
       g.instanceCount = count;
       const m = new THREE.Mesh(g, this.material);
       m.frustumCulled = false;
+      m.layers.enable(1); // visible in the water reflection
       this.meshes.push(m);
       this.group.add(m);
       return inst;

@@ -9,6 +9,7 @@ import { Post } from './post.ts';
 import { Clouds, CLOUD_BASE, CLOUD_TOP } from './clouds.ts';
 import { TerrainShadows } from './shadows.ts';
 import { Trees } from './trees.ts';
+import { Water } from './water.ts';
 import { globals } from './globals.ts';
 import {
   sunDirection, moonDirection, starRotation, exposureForSun, elevationDeg, SUN_ILLUMINANCE, MOON_ILLUMINANCE_SCALE, MOON_ILLUMINATION,
@@ -28,6 +29,7 @@ export class WorldRenderer {
   clouds: Clouds | null = null;
   shadows: TerrainShadows | null = null;
   trees: Trees;
+  water: Water;
   readonly scaler = new ResolutionScaler();
   preset: QualityPreset;
   /** Clip state of the last rendered frame: collision must use this. */
@@ -85,6 +87,9 @@ export class WorldRenderer {
     this.scene.add(this.terrain.group);
     this.trees = this.makeTrees();
     this.scene.add(this.trees.mesh);
+    this.water = this.makeWater();
+    this.scene.add(this.water.group);
+    this.sky.mesh.layers.enable(1);
     this.clip = makeClipState(this.terrain.cfg, 0, 0);
     this.post = new Post({ hdr: caps.floatTargets, bloomLevels: this.preset.bloomLevels, samples: this.preset.msaa });
     if (caps.floatTargets) this.clouds = new Clouds(THREE.HalfFloatType, this.preset.cloudDiv, this.preset.cloudSteps);
@@ -93,7 +98,14 @@ export class WorldRenderer {
 
   private makeTrees(): Trees {
     const p = this.preset;
-    return new Trees(p.trees, p.treeRadius, p.treeCell, !this.caps.floatTargets);
+    const t = new Trees(p.trees, p.treeRadius, p.treeCell, !this.caps.floatTargets);
+    t.mesh.layers.enable(1);
+    return t;
+  }
+
+  private makeWater(): Water {
+    const p = this.preset;
+    return new Water({ M: p.waterM, levels: p.waterLevels, s0: p.terrainS0 }, !this.caps.floatTargets, p.reflScale, this.terrain);
   }
 
   setQuality(name: QualityName): void {
@@ -110,6 +122,11 @@ export class WorldRenderer {
     this.scene.remove(this.trees.mesh);
     this.trees = this.makeTrees();
     this.scene.add(this.trees.mesh);
+    const wind = globals.uWind.value;
+    this.scene.remove(this.water.group);
+    this.water = this.makeWater();
+    this.water.setWind(wind.x, wind.z);
+    this.scene.add(this.water.group);
     this.applySize();
   }
 
@@ -127,6 +144,7 @@ export class WorldRenderer {
     const s = this.scaler.scale * Math.min(1, this.preset.maxPixelRatio);
     this.post.setSize(this.cssW * this.pixelRatio * s, this.cssH * this.pixelRatio * s);
     this.clouds?.setSize(this.post.width, this.post.height);
+    this.water?.setSize(this.post.width, this.post.height);
     this.camera.aspect = this.cssW / this.cssH;
     this.camera.updateProjectionMatrix();
   }
@@ -176,6 +194,28 @@ export class WorldRenderer {
     g.uAmbientBoost.value = 1 + 0.45 * twilight + 0.25 * this.post.composeUniforms.uNight.value;
   }
 
+  private renderReflection(cam: THREE.PerspectiveCamera): void {
+    const w = this.water;
+    if (!w.reflection) return;
+    const g = globals;
+    w.updateReflectionCamera(cam);
+    const rc = w.reflCam;
+    const savedPos = g.uCamPosF.value.clone();
+    const savedRot = g.uViewRot.value.clone();
+    g.uCamPosF.value.set(Math.fround(rc.position.x), Math.fround(rc.position.y), Math.fround(rc.position.z));
+    g.uViewRot.value.extractRotation(rc.matrixWorldInverse);
+    g.uReflectPass.value = 1;
+    this.sky.updateCamera(rc);
+    const r = this.renderer;
+    r.setRenderTarget(w.reflection);
+    r.clear(true, true, false);
+    r.render(this.scene, rc);
+    g.uReflectPass.value = 0;
+    g.uCamPosF.value.copy(savedPos);
+    g.uViewRot.value.copy(savedRot);
+    this.sky.updateCamera(cam);
+  }
+
   render(dt: number): void {
     const g = globals;
     this.frame++;
@@ -209,6 +249,9 @@ export class WorldRenderer {
     this.terrain.update(r, cam.position.x, cam.position.z);
     this.mark('terrainBake');
     this.trees.update(cam.position.x, cam.position.z, 1.5);
+    this.water.update(cam.position.x, cam.position.z, g.uTime.value);
+    this.renderReflection(cam);
+    this.mark('reflection');
     this.clip = makeClipState(this.terrain.cfg, cam.position.x, cam.position.z);
 
     r.setRenderTarget(this.post.scene);

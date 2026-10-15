@@ -22,20 +22,22 @@ export interface QualityPreset {
   trees: number;
   treeRadius: number;
   treeCell: number;
+  /** planar water reflection resolution scale (0 = sky-only reflections) */
+  reflScale: number;
 }
 
 export const PRESETS: Record<QualityName, QualityPreset> = {
   high: {
     name: 'high', terrainM: 128, terrainLevels: 11, terrainS0: 1, waterM: 64, waterLevels: 14,
-    envWidth: 512, bloomLevels: 6, msaa: 4, maxPixelRatio: 1.5, cloudDiv: 2, cloudSteps: 48, shadowSize: 1024, trees: 60000, treeRadius: 1800, treeCell: 9,
+    envWidth: 512, bloomLevels: 6, msaa: 4, maxPixelRatio: 1.5, cloudDiv: 2, cloudSteps: 48, shadowSize: 1024, trees: 60000, treeRadius: 1800, treeCell: 9, reflScale: 0.5,
   },
   medium: {
     name: 'medium', terrainM: 96, terrainLevels: 12, terrainS0: 1, waterM: 48, waterLevels: 15,
-    envWidth: 256, bloomLevels: 5, msaa: 2, maxPixelRatio: 1.0, cloudDiv: 4, cloudSteps: 36, shadowSize: 512, trees: 30000, treeRadius: 1300, treeCell: 12,
+    envWidth: 256, bloomLevels: 5, msaa: 2, maxPixelRatio: 1.0, cloudDiv: 4, cloudSteps: 36, shadowSize: 512, trees: 30000, treeRadius: 1300, treeCell: 12, reflScale: 0.35,
   },
   low: {
     name: 'low', terrainM: 64, terrainLevels: 11, terrainS0: 2, waterM: 32, waterLevels: 16,
-    envWidth: 128, bloomLevels: 4, msaa: 0, maxPixelRatio: 0.75, cloudDiv: 4, cloudSteps: 24, shadowSize: 256, trees: 10000, treeRadius: 850, treeCell: 16,
+    envWidth: 128, bloomLevels: 4, msaa: 0, maxPixelRatio: 0.75, cloudDiv: 4, cloudSteps: 24, shadowSize: 256, trees: 10000, treeRadius: 850, treeCell: 16, reflScale: 0,
   },
 };
 

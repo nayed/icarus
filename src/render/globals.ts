@@ -40,6 +40,8 @@ export const globals = {
   uKeyIsSun: { value: 1 },
   /** artistic fill: lifts sky light on surfaces in twilight so the land stays readable */
   uAmbientBoost: { value: 1 },
+  /** 1 while rendering the planar water reflection (underwater geometry is discarded) */
+  uReflectPass: { value: 0 },
 };
 
 export type Globals = typeof globals;
@@ -75,6 +77,7 @@ uniform sampler2D uShadowMap;
 uniform vec4 uShadowOrigin;
 uniform float uKeyIsSun;
 uniform float uAmbientBoost;
+uniform float uReflectPass;
 
 float saturate(float x) { return clamp(x, 0.0, 1.0); }
 vec3 saturate(vec3 x) { return clamp(x, 0.0, 1.0); }

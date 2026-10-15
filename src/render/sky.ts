@@ -5,6 +5,7 @@ import { ATMOSPHERE_GLSL, SKYVIEW_SAMPLE_GLSL } from './atmosphere.ts';
 import { GLOBALS_GLSL, globals } from './globals.ts';
 import { NOISE_GLSL } from '../world/noise.ts';
 import { FullscreenPass } from './fullscreen.ts';
+import { CLOUD_COMMON_GLSL } from './clouds.ts';
 
 export const SKY_FUNCS_GLSL = /* glsl */ `
 uniform vec3 uSunDiscRad;
@@ -133,6 +134,27 @@ vec3 cirrus(vec3 d, vec3 base) {
   return mix(base, lit, cov * 0.65);
 }
 
+/** Flat stand-in for the volumetric layer, used where the raymarch is not run (reflections, env map). */
+vec3 flatClouds(vec3 d, vec3 base) {
+  if (d.y < 0.008 || uCloudCover <= 0.0) return base;
+  float camY = abs(uCamPosF.y);
+  float mid = 0.5 * (CLOUD_BASE + CLOUD_TOP);
+  if (camY > CLOUD_BASE) return base;
+  float t = (mid - camY) / d.y;
+  vec3 P = vec3(uCamPosF.x, camY, uCamPosF.z) + d * t;
+  float w = cloudWeather(P.xz);
+  float a = smoothstep(0.12, 0.6, w) * (1.0 - smoothstep(25000.0, 60000.0, t));
+  if (a <= 0.0) return base;
+  vec3 pos = vec3(0.0, ATM_RG + mid * 0.001, 0.0);
+  vec3 sunT = lightTransmittance(uTransmittance, pos, uSunDir);
+  vec3 moonT = lightTransmittance(uTransmittance, pos, uMoonDir);
+  float thick = smoothstep(0.3, 0.9, w);
+  float ps = 0.18 + 1.4 * miePhase(dot(d, uSunDir), 0.6);
+  float pm = 0.18 + 1.4 * miePhase(dot(d, uMoonDir), 0.6);
+  vec3 lit = (uSunIllum * sunT * ps + uMoonIllum * moonT * pm) * mix(0.9, 0.35, thick) + skyRadiance(vec3(0.0, 1.0, 0.0)) * 0.8;
+  return mix(base, lit, a * 0.9);
+}
+
 vec3 skyColor(vec3 d, float pixAngle, vec2 frag, bool withDiscs) {
   vec3 dd = vec3(d.x, max(d.y, 0.0), d.z);
   vec3 col = skyRadiance(dd);
@@ -140,6 +162,7 @@ vec3 skyColor(vec3 d, float pixAngle, vec2 frag, bool withDiscs) {
   col += aurora(d, frag, pixAngle);
   if (withDiscs) col += moonDisc(d) + sunDisc(d);
   col = cirrus(d, col);
+  if (!withDiscs || uReflectPass > 0.5) col = flatClouds(d, col);
   return col;
 }
 `;
@@ -189,7 +212,7 @@ void main() {
 `;
 
 export function skyShaderPrefix(): string {
-  return ATMOSPHERE_GLSL + SKYVIEW_SAMPLE_GLSL + NOISE_GLSL + GLOBALS_GLSL + SKY_FUNCS_GLSL;
+  return ATMOSPHERE_GLSL + SKYVIEW_SAMPLE_GLSL + NOISE_GLSL + GLOBALS_GLSL + CLOUD_COMMON_GLSL + SKY_FUNCS_GLSL;
 }
 
 export class Sky {
