@@ -48,7 +48,7 @@ not part of this repository.
 | Camera | C cycles; 1 chase, 2 cockpit, 3 cinematic; drag the mouse to look around |
 | Landing light | L |
 | HUD / fullscreen | H / K |
-| Pause | Esc or P |
+| Pause | Esc or P (in fullscreen, Esc leaves fullscreen and pauses the flight; P resumes) |
 | Restart | Backspace |
 
 Menu: Enter flies; Esc on the results card goes back to the menu.

@@ -42,6 +42,19 @@ for (const [w, h, tag] of [[1920, 1080, 'desktop'], [390, 844, 'phone']]) {
     await shot(page, `ui-${tag}-hud-rings`);
     await page.keyboard.press('KeyC'); await sleep(1200);
     await shot(page, `ui-${tag}-hud-cockpit`);
+    // fullscreen: K toggles it without pausing; any other exit (the browser's Esc) pauses the flight
+    const fsFlight = () => page.evaluate(() => ({ on: !!document.fullscreenElement, state: window.__icarus.session.state() }));
+    await page.keyboard.press('KeyK'); await sleep(400);
+    await page.keyboard.press('KeyK'); await sleep(400);
+    const k = await fsFlight();
+    check(!k.on && k.state === 'flying', `K in and out of fullscreen keeps flying (${k.state})`);
+    await page.keyboard.press('KeyK'); await sleep(400);
+    await page.evaluate(() => document.exitFullscreen()); // what the browser does on Esc
+    await sleep(400);
+    const e = await fsFlight();
+    check(!e.on && e.state === 'paused', `leaving fullscreen the browser's way pauses the flight (${e.state})`);
+    await page.keyboard.press('KeyP'); await sleep(600);
+    check((await fsFlight()).state === 'flying', 'P resumes');
     await page.keyboard.press('Escape');
     await sleep(600);
     check((await page.evaluate(() => window.__icarus.session.state())) === 'paused', 'Esc pauses');

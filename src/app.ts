@@ -65,6 +65,8 @@ export class App {
   hudVisible = true;
   /** main-thread time of the last frame (ms) */
   cpuMs = 0;
+  /** when leaving fullscreen last paused the flight (performance.now) */
+  private fullscreenPauseAt = -1e9;
   /** when set, replaces keyboard input (tests) */
   inputOverride: PilotInput | null = null;
   /** free camera for debug screenshots */
@@ -136,6 +138,18 @@ export class App {
       if (this.mouseDown) this.rig.look(e.movementX, e.movementY);
     });
     addEventListener('keydown', () => this.audio.start(), { once: true });
+    // in fullscreen the browser keeps Esc for itself: it leaves fullscreen and the page never sees the
+    // key, so the flight would carry on unpaused. Leaving fullscreen that way pauses; the game's own
+    // toggle (K, buttons) does not.
+    document.addEventListener('fullscreenchange', () => {
+      if (document.fullscreenElement) return;
+      const onPurpose = leavingFullscreenOnPurpose;
+      leavingFullscreenOnPurpose = false;
+      if (!onPurpose && this.state === 'flying') {
+        this.pause();
+        this.fullscreenPauseAt = performance.now();
+      }
+    });
 
     this.hud = new Hud(document.getElementById('hud') as HTMLCanvasElement);
     new ResizeObserver(() => this.onResize()).observe(canvas.parentElement!);
@@ -315,7 +329,8 @@ export class App {
     }
     if (a === 'pause') {
       if (this.state === 'flying') this.pause();
-      else if (this.state === 'paused') this.resume();
+      // a browser that also delivers the Esc that left fullscreen must not undo that pause at once
+      else if (this.state === 'paused' && performance.now() - this.fullscreenPauseAt > 150) this.resume();
       return;
     }
     if (a === 'restart' && (this.state === 'flying' || this.state === 'paused')) {
@@ -458,11 +473,17 @@ export class App {
   }
 }
 
+/** Set while the game itself leaves fullscreen (K, buttons): only other exits pause a flight. */
+let leavingFullscreenOnPurpose = false;
+
 export async function toggleFullscreen(): Promise<void> {
   try {
-    if (document.fullscreenElement) await document.exitFullscreen();
-    else await document.documentElement.requestFullscreen();
+    if (document.fullscreenElement) {
+      leavingFullscreenOnPurpose = true;
+      await document.exitFullscreen();
+    } else await document.documentElement.requestFullscreen();
   } catch {
     // ignored: fullscreen can be refused (iframes, user settings)
+    leavingFullscreenOnPurpose = false;
   }
 }

@@ -73,7 +73,7 @@ and its instrument panel, even the engine sound. There are no models, textures o
 | Camera | C to cycle, or 1 chase, 2 cockpit, 3 cinematic; drag the mouse to look around |
 | Landing light | L |
 | HUD / fullscreen | H / K |
-| Pause | Esc or P |
+| Pause | Esc or P (in fullscreen, Esc leaves fullscreen and pauses the flight; P resumes) |
 | Restart | Backspace |
 
 Keys are read by their position, so the same physical keys work on any keyboard layout (the table uses
