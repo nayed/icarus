@@ -5,7 +5,7 @@ import type { QualityName } from '../render/quality.ts';
 import { TIME_PRESETS, type TimePreset } from '../world/celestial.ts';
 import type { ModeResult } from '../game/grading.ts';
 import { formatTime } from '../game/grading.ts';
-import { actionLabel, type Action } from '../input/controls.ts';
+import { actionLabel, keyLabel, type Action } from '../input/controls.ts';
 import { buildCourse, coursePar } from '../game/course.ts';
 import { toggleFullscreen } from '../app.ts';
 
@@ -144,7 +144,7 @@ export class UI {
           <div class="inline-seg"><span class="label">Graphics</span><div class="seg" data-group="pquality"></div></div>
           <div class="divider"></div>
           <div class="btn-row">
-            <button class="btn primary" data-act="resume">Resume <span class="kbd">Esc</span></button>
+            <button class="btn primary" data-act="resume">Resume <span class="kbd">${keyLabel('KeyP')}</span></button>
             <button class="btn" data-act="restart">Restart</button>
           </div>
           <div class="btn-row" style="margin-top:10px">
