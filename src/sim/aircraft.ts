@@ -215,6 +215,8 @@ export class Aircraft {
     this.crashed = false;
     this.crashReason = '';
     this.damage = '';
+    // a crash stops the engine; a placed aircraft always starts with it running
+    this.engineOn = true;
     this.stalled = false;
     this.overspeed = false;
     this.airborneTime = 0;

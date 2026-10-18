@@ -161,6 +161,7 @@ export function installDebugHooks(app: App): void {
         const c = new scenarios.ApproachController(strip, where === 'water');
         c.place(app.ac, dist);
         app.startFlightAt();
+        app.state = 'flying';
         const inp = { ...app.controls.input, flapNotch: 2, gearDown: where !== 'water', brake: 0 };
         app.inputOverride = inp;
         app.ac.onTouchdown = (t) => c.onTouchdown(t);

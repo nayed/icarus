@@ -154,3 +154,22 @@ describe('speed limits', () => {
     expect(ac.crashed).toBe(false);
   });
 });
+
+describe('restarts', () => {
+  it('a reset after a crash starts with the engine running', () => {
+    const env = new WorldEnv({ M: 128, levels: 11, s0: 1 });
+    const ac = new Aircraft();
+    const inp: PilotInput = { ...idleInput(), throttle: 1, gearDown: false };
+    ac.reset(-20000, 600, 4000, 80, 46);
+    ac.crash('test');
+    ac.step(1 / 120, inp, env); // a wreck stops its engine
+    expect(ac.engineOn).toBe(false);
+    ac.reset(-20000, 600, 4000, 80, 46);
+    for (let i = 0; i < 240; i++) {
+      env.follow(ac.pos.x, ac.pos.z);
+      ac.step(1 / 120, inp, env);
+    }
+    expect(ac.engineOn).toBe(true);
+    expect(ac.rpm).toBeGreaterThan(1900);
+  });
+});

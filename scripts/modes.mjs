@@ -71,6 +71,26 @@ await page.evaluate(() => window.__icarus.flight.input({ pitch: -1, throttle: 1 
 r = await waitResult(60000);
 check(r && r.grade === 'F' && !r.success, `crash ends the session: ${r ? `${r.headline} — ${r.subtitle}` : 'no result'}`);
 
+console.log('\n== ring run, crash then retry');
+await open('rings');
+await page.evaluate(() => window.__icarus.flight.input({ pitch: -1, throttle: 1 }));
+r = await waitResult(90000);
+check(r && !r.success, `the crash ends the run: ${r ? `${r.grade} ${r.headline}` : 'no result'}`);
+// whether the wreck's engine has stopped depends on frame timing (a physics step after the crash in
+// the same frame stops it): force that state, then do what Retry does. The retry used to keep it stopped.
+await page.evaluate(() => { window.app.ac.engineOn = false; window.__icarus.flight.input(null); window.app.restartSession(); });
+await waitFrames(page, 30);
+const eng = await page.evaluate(() => ({ on: window.app.ac.engineOn, rpm: window.app.ac.rpm, thr: window.app.ac.throttle, state: window.__icarus.session.state() }));
+check(eng.state === 'flying' && eng.on && eng.rpm > 1500, `the retry starts with the engine running: ${Math.round(eng.rpm)} rpm at ${Math.round(eng.thr * 100)}% power`);
+
+console.log('\n== menu flight: a crash restarts it, the menu stays');
+await page.evaluate(() => window.app.enterMenu());
+await waitFrames(page, 10);
+await page.evaluate(() => window.app.ac.crash('test'));
+await waitFrames(page, 20);
+const menu = await page.evaluate(() => ({ state: window.__icarus.session.state(), crashed: window.app.ac.crashed, on: window.app.ac.engineOn }));
+check(menu.state === 'menu' && !menu.crashed && menu.on, `background flight restarted with its engine, state stays ${menu.state}`);
+
 const ok = report(problems) && failures === 0;
 console.log(ok ? '\nMODE TESTS OK' : `\nMODE TESTS FAILED (${failures})`);
 await browser.close();

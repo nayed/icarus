@@ -244,19 +244,7 @@ export class App {
       ac.reset(-6000, 420, 2300, 80, 45);
       this.controls.reset(0.62, true, 0);
     }
-    ac.model = this.settings.model;
-    this.prevPos.copy(ac.pos);
-    this.prevQuat.copy(ac.q);
-    this.acc = 0;
-    this.simTime = 0;
-    ac.time = 0;
-    ac.crashed = false;
-    ac.engineOn = true;
-    this.lampOn = this.isDark();
-    this.rig.snap();
-    this.recentreSurface();
-    // the trees right around the start appear at once; the rest stream in nearest first
-    this.world.trees.prefill(ac.pos.x, ac.pos.z, 500);
+    this.startFlightAt();
   }
 
   /** Starts (or restarts) a game mode. */
@@ -286,18 +274,23 @@ export class App {
     this.startSession(this.sessionKind, this.sessionStart);
   }
 
-  /** Resets interpolation and clocks after the aircraft was placed externally. */
+  /**
+   * Common setup once the aircraft has been placed (ac.reset): interpolation, clocks, cameras, the
+   * surface and nearby trees. The app state is left to the caller (startSession).
+   */
   startFlightAt(): void {
-    this.prevPos.copy(this.ac.pos);
-    this.prevQuat.copy(this.ac.q);
+    const ac = this.ac;
+    ac.model = this.settings.model;
+    this.prevPos.copy(ac.pos);
+    this.prevQuat.copy(ac.q);
     this.acc = 0;
     this.simTime = 0;
-    this.ac.time = 0;
+    ac.time = 0;
     this.lampOn = this.isDark();
-    this.ac.model = this.settings.model;
-    this.state = 'flying';
     this.rig.snap();
     this.recentreSurface();
+    // the trees right around the start appear at once; the rest stream in nearest first
+    this.world.trees.prefill(ac.pos.x, ac.pos.z, 500);
   }
 
   isDark(): boolean {
