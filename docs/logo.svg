@@ -1,0 +1,137 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>Icarus</title>
+  <!-- Hand-written, like everything else in Icarus. The aircraft group uses the game model's own
+       dimensions in metres (src/plane/planeMesh.ts), seen from above and behind, flying up the fjord. -->
+  <defs>
+    <clipPath id="tile"><rect width="512" height="512" rx="114"/></clipPath>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="236" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#08121f"/>
+      <stop offset="0.45" stop-color="#13293f"/>
+      <stop offset="0.8" stop-color="#2b5469"/>
+      <stop offset="1" stop-color="#6c99a6"/>
+    </linearGradient>
+    <linearGradient id="sea" x1="0" y1="232" x2="0" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6593a2"/>
+      <stop offset="0.3" stop-color="#2a6a7e"/>
+      <stop offset="1" stop-color="#0f4459"/>
+    </linearGradient>
+    <linearGradient id="curtain" x1="0" y1="30" x2="0" y2="150" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7fdcc0" stop-opacity="0"/>
+      <stop offset="0.7" stop-color="#7fdcc0" stop-opacity="0.32"/>
+      <stop offset="1" stop-color="#9ff0d6" stop-opacity="0.6"/>
+    </linearGradient>
+    <pattern id="rays" width="23" height="200" patternUnits="userSpaceOnUse" patternTransform="rotate(-6)">
+      <rect x="2" width="3" height="200" fill="#bdf7e4" opacity="0.5"/>
+      <rect x="11" width="5" height="200" fill="#bdf7e4" opacity="0.25"/>
+      <rect x="19" width="1.5" height="200" fill="#bdf7e4" opacity="0.4"/>
+    </pattern>
+    <filter id="glow" x="-20%" y="-50%" width="140%" height="200%"><feGaussianBlur stdDeviation="5"/></filter>
+    <mask id="fade" maskUnits="userSpaceOnUse" x="0" y="0" width="512" height="512">
+      <rect width="512" height="200" fill="url(#curtain)"/>
+    </mask>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2.2"/></filter>
+  </defs>
+
+  <g clip-path="url(#tile)">
+    <rect width="512" height="512" fill="url(#sky)"/>
+
+    <!-- stars -->
+    <g fill="#e8eef2">
+      <circle cx="58" cy="44" r="1.6" opacity="0.8"/>
+      <circle cx="132" cy="22" r="1.2" opacity="0.6"/>
+      <circle cx="214" cy="40" r="1.4" opacity="0.7"/>
+      <circle cx="300" cy="18" r="1.1" opacity="0.5"/>
+      <circle cx="372" cy="36" r="1.7" opacity="0.85"/>
+      <circle cx="452" cy="58" r="1.2" opacity="0.6"/>
+      <circle cx="96" cy="86" r="1" opacity="0.45"/>
+      <circle cx="478" cy="20" r="1" opacity="0.5"/>
+      <circle cx="26" cy="104" r="1.1" opacity="0.4"/>
+      <circle cx="260" cy="64" r="0.9" opacity="0.4"/>
+    </g>
+
+    <!-- aurora: a curtain with a bright lower edge, fading upwards -->
+    <path d="M-20 92 C70 52 150 86 240 74 S400 26 532 40 L532 104 C430 92 350 140 250 132 S90 116 -20 160 Z"
+          fill="url(#curtain)" filter="url(#soft)"/>
+    <path d="M-20 92 C70 52 150 86 240 74 S400 26 532 40 L532 104 C430 92 350 140 250 132 S90 116 -20 160 Z"
+          fill="url(#rays)" mask="url(#fade)" filter="url(#soft)"/>
+    <path d="M-20 160 C90 116 150 134 250 132 S430 92 532 104" fill="none" stroke="#a6f3db"
+          stroke-width="7" opacity="0.55" filter="url(#glow)"/>
+    <path d="M-20 160 C90 116 150 134 250 132 S430 92 532 104" fill="none" stroke="#c4f8e8"
+          stroke-width="1.6" opacity="0.7"/>
+
+    <!-- far peaks at the head of the fjord -->
+    <path d="M128 236 L206 146 L244 190 L270 176 L322 154 L410 236 Z" fill="#3c637b"/>
+    <path d="M206 146 L232 236 L128 236 Z M322 154 L300 236 L410 236 Z" fill="#4c7690"/>
+    <path d="M206 146 L220 162 L212 160 L204 170 L196 163 L188 168 Z" fill="#e2ebef"/>
+    <path d="M206 146 L220 162 L230 174 L222 172 L216 166 L212 160 Z" fill="#a9bfcb"/>
+    <path d="M322 154 L338 170 L330 168 L324 176 L316 170 L306 174 Z" fill="#e2ebef"/>
+    <path d="M322 154 L306 174 L298 180 L304 168 Z" fill="#a9bfcb"/>
+
+    <!-- the sea, then the fjord walls over it -->
+    <rect y="232" width="512" height="280" fill="url(#sea)"/>
+    <ellipse cx="256" cy="262" rx="7" ry="34" fill="#9ff0d6" opacity="0.18" filter="url(#soft)"/>
+    <path d="M0 150 L48 168 L92 200 L150 222 L206 232 L232 238 L198 246 L150 262 L170 280 L118 312 L136 334
+             L82 372 L100 396 L40 446 L58 470 L0 512 Z" fill="#163a55"/>
+    <path d="M512 140 L460 162 L420 196 L362 220 L310 234 L286 238 L322 248 L366 266 L348 286 L398 316
+             L380 340 L436 376 L418 402 L476 448 L456 474 L512 508 Z" fill="#163a55"/>
+    <path d="M0 220 L44 240 L88 256 L112 282 L76 316 L92 338 L44 380 L58 404 L0 460 Z" fill="#0d2840"/>
+    <path d="M512 214 L470 236 L424 258 L400 286 L436 318 L420 344 L468 380 L452 408 L512 452 Z" fill="#0d2840"/>
+    <path d="M206 232 L232 238 L198 246 L150 262 L170 280 L118 312 L136 334 L82 372 L100 396 L40 446 L58 470 L0 512
+             L0 509 L54 470 L36 446 L96 396 L78 372 L132 334 L114 312 L166 280 L146 262 L196 245 Z" fill="#5e8fa0" opacity="0.35"/>
+    <path d="M310 234 L286 238 L322 248 L366 266 L348 286 L398 316 L380 340 L436 376 L418 402 L476 448 L456 474 L512 508
+             L512 505 L460 474 L480 448 L422 402 L384 340 L402 316 L352 286 L370 266 L326 248 Z" fill="#5e8fa0" opacity="0.25"/>
+
+    <!-- the aircraft's shadow on the water, then the aircraft (1 unit = 1 m, x right, y = aft) -->
+    <g fill="#06283a" opacity="0.4" filter="url(#soft)">
+      <use href="#plane-shape" transform="translate(296 432) scale(16)"/>
+    </g>
+    <g transform="translate(256 352) scale(19)">
+      <g id="plane">
+        <!-- floats, with their struts to the fuselage -->
+        <g id="float" fill="#b8bdc1">
+          <path d="M1.3 -4.15 C1.48 -4.1 1.6 -3.6 1.67 -3.2 C1.72 -2.6 1.72 -0.6 1.72 -0.2 L1.7 0.2
+                   C1.68 1 1.64 1.8 1.55 2.4 C1.45 3 1.36 3.5 1.3 3.66 C1.24 3.5 1.15 3 1.05 2.4
+                   C0.96 1.8 0.92 1 0.9 0.2 L0.88 -0.2 C0.88 -0.6 0.88 -2.6 0.93 -3.2 C1 -3.6 1.12 -4.1 1.3 -4.15 Z"/>
+          <path d="M1.3 -4.05 C1.36 -3.6 1.38 -1 1.38 0.2 C1.38 1.4 1.34 2.6 1.3 3.5" fill="none" stroke="#e1e4e6" stroke-width="0.09"/>
+        </g>
+        <use href="#float" transform="scale(-1 1)"/>
+        <g stroke="#29333d" stroke-width="0.1" stroke-linecap="round">
+          <path d="M1.2 -2.25 L0.5 -2.5 M-1.2 -2.25 L-0.5 -2.5 M1.2 0.45 L0.5 0.3 M-1.2 0.45 L-0.5 0.3"/>
+        </g>
+        <!-- fuselage: cream, orange cowl, dark spinner, windshield -->
+        <path d="M0 -4.55 C0.3 -4.55 0.6 -4.45 0.62 -4.25 L0.64 -3.4 L0.64 -0.9 C0.63 0 0.6 0.6 0.55 1.1
+                 C0.47 2 0.36 3 0.28 3.8 C0.2 4.6 0.12 5.6 0.04 6.18 L-0.04 6.18 C-0.12 5.6 -0.2 4.6 -0.28 3.8
+                 C-0.36 3 -0.47 2 -0.55 1.1 C-0.6 0.6 -0.63 0 -0.64 -0.9 L-0.64 -3.4 L-0.62 -4.25
+                 C-0.6 -4.45 -0.3 -4.55 0 -4.55 Z" fill="#e6dcc4"/>
+        <path d="M0 -4.55 C0.3 -4.55 0.6 -4.45 0.62 -4.25 L0.64 -3.35 L-0.64 -3.35 L-0.62 -4.25 C-0.6 -4.45 -0.3 -4.55 0 -4.55 Z" fill="#f2a24b"/>
+        <ellipse cx="0" cy="-4.6" rx="0.2" ry="0.16" fill="#29333d"/>
+        <rect x="-1.35" y="-4.72" width="2.7" height="0.12" rx="0.06" fill="#e8eef2" opacity="0.3"/>
+        <path d="M-0.56 -2.45 L-0.5 -3.0 C-0.3 -3.12 0.3 -3.12 0.5 -3.0 L0.56 -2.45 Z" fill="#141d24"/>
+        <path d="M-0.05 -2.5 L0.05 -2.5 L0.05 -3.05 L-0.05 -3.05 Z" fill="#29333d"/>
+        <!-- wing (on top: a high wing), flap and aileron line, orange tips -->
+        <path d="M-7.3 -1.32 L7.3 -1.32 L7.3 0.05 C7.3 0.2 7.2 0.3 7.05 0.3 L-7.05 0.3 C-7.2 0.3 -7.3 0.2 -7.3 0.05 Z" fill="#ece3cd"/>
+        <path d="M-7.3 -0.09 L7.3 -0.09" stroke="#c9bfa6" stroke-width="0.07"/>
+        <path d="M6.9 -1.32 L7.3 -1.32 L7.3 0.05 C7.3 0.2 7.2 0.3 7.05 0.3 L6.9 0.3 Z" fill="#f2a24b"/>
+        <path d="M-6.9 -1.32 L-7.3 -1.32 L-7.3 0.05 C-7.3 0.2 -7.2 0.3 -7.05 0.3 L-6.9 0.3 Z" fill="#f2a24b"/>
+        <path d="M-0.64 -1.32 L0.64 -1.32" stroke="#141d24" stroke-width="0.1" opacity="0.5"/>
+        <!-- tailplane with orange elevator tips, and the fin's orange top -->
+        <path d="M-0.18 4.9 L-2.55 5.02 C-2.6 5.4 -2.58 5.7 -2.5 5.83 L-0.18 6.05 L0.18 6.05 L2.5 5.83
+                 C2.58 5.7 2.6 5.4 2.55 5.02 L0.18 4.9 Z" fill="#e6dcc4"/>
+        <path d="M2.3 5.5 L2.56 5.5 C2.58 5.65 2.56 5.75 2.5 5.83 L2.3 5.85 Z M-2.3 5.5 L-2.56 5.5 C-2.58 5.65 -2.56 5.75 -2.5 5.83 L-2.3 5.85 Z" fill="#f2a24b"/>
+        <path d="M0 4.6 L0 5.6" stroke="#d8cdb3" stroke-width="0.12"/>
+        <path d="M0 5.6 L0 6.42" stroke="#f2a24b" stroke-width="0.14" stroke-linecap="round"/>
+      </g>
+    </g>
+  </g>
+
+  <!-- silhouette for the shadow -->
+  <defs>
+    <g id="plane-shape">
+      <path d="M-7.3 -1.32 H7.3 V0.3 H-7.3 Z"/>
+      <path d="M0 -4.55 C0.4 -4.55 0.64 -4.3 0.64 -3.4 V-0.9 C0.6 1 0.3 3.8 0.04 6.18 H-0.04 C-0.3 3.8 -0.6 1 -0.64 -0.9 V-3.4 C-0.64 -4.3 -0.4 -4.55 0 -4.55 Z"/>
+      <path d="M-2.55 5 H2.55 V5.9 H-2.55 Z"/>
+      <path d="M1.3 -4.15 C1.7 -3.6 1.72 -2 1.72 0 C1.7 2 1.5 3 1.3 3.66 C1.1 3 0.9 2 0.88 0 C0.88 -2 0.9 -3.6 1.3 -4.15 Z"/>
+      <path d="M-1.3 -4.15 C-1.7 -3.6 -1.72 -2 -1.72 0 C-1.7 2 -1.5 3 -1.3 3.66 C-1.1 3 -0.9 2 -0.88 0 C-0.88 -2 -0.9 -3.6 -1.3 -4.15 Z"/>
+    </g>
+  </defs>
+</svg>

@@ -1,5 +1,7 @@
 ![The floatplane banking over the fjord at golden hour](docs/screenshots/hero.jpg)
 
+<p align="center"><img src="docs/logo.svg" width="128" height="128" alt=""></p>
+
 <h1 align="center">Icarus</h1>
 
 <p align="center"><b>A calm, procedural flight simulator for the browser.</b><br>

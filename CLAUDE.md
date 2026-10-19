@@ -61,4 +61,6 @@ live in NOTES.md; keep them current when behaviour changes.
 - Warnings and error screens stay amber (`--alert`, `ALERT`) so they stand out from the accent.
 - The cockpit instruments stay amber, and the aircraft's orange livery is orange on purpose (chosen by
   the user): do not recolour either to mint.
+- Logo `docs/logo.svg` (README) and favicon `public/favicon.svg` are hand-written SVG: dusk fjord, mint
+  aurora, the aircraft in its livery, drawn at the game model's dimensions. Change them together.
 - The aircraft is an amphibian: gear down for the strips, gear up for the water.
