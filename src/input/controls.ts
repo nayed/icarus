@@ -5,7 +5,7 @@ import type { PilotInput } from '../sim/aircraft.ts';
 export type Action =
   | 'pitchDown' | 'pitchUp' | 'rollLeft' | 'rollRight' | 'yawLeft' | 'yawRight'
   | 'throttleUp' | 'throttleDown' | 'brake' | 'gear' | 'flapsDown' | 'flapsUp' | 'trimDown' | 'trimUp'
-  | 'camera' | 'camChase' | 'camCockpit' | 'camCinematic' | 'light' | 'pause' | 'hud' | 'fullscreen' | 'restart';
+  | 'camera' | 'camChase' | 'camCockpit' | 'camCinematic' | 'light' | 'pause' | 'hud' | 'map' | 'fullscreen' | 'restart';
 
 export const BINDINGS: Record<Action, string[]> = {
   pitchDown: ['KeyW', 'ArrowUp'],
@@ -29,6 +29,7 @@ export const BINDINGS: Record<Action, string[]> = {
   light: ['KeyL'],
   pause: ['Escape', 'KeyP'],
   hud: ['KeyH'],
+  map: ['KeyM'],
   fullscreen: ['KeyK'],
   restart: ['Backspace'],
 };

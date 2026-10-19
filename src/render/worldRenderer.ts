@@ -12,6 +12,7 @@ import { Trees } from './trees.ts';
 import { Water } from './water.ts';
 import { globals } from './globals.ts';
 import { GpuTimer } from './gpuTimer.ts';
+import { WorldMap } from './worldMap.ts';
 import {
   sunDirection, moonDirection, starRotation, exposureForSun, elevationDeg, SUN_ILLUMINANCE, MOON_ILLUMINANCE_SCALE, MOON_ILLUMINATION,
 } from '../world/celestial.ts';
@@ -42,6 +43,8 @@ export class WorldRenderer {
   water: Water;
   readonly scaler = new ResolutionScaler();
   readonly gpuTimer: GpuTimer;
+  /** the map image for the HUD and the pause screen, baked in the background */
+  readonly map = new WorldMap();
   preset: QualityPreset;
   /** Clip state of the last rendered frame: collision must use this. */
   clip: ClipState;
@@ -301,5 +304,7 @@ export class WorldRenderer {
     }
     this.gpuTimer.end();
     this.mark('post');
+    // background work after the frame (and outside its GPU timing: it must not lower the resolution)
+    this.map.update(r);
   }
 }

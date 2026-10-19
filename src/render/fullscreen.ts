@@ -24,6 +24,18 @@ export class FullscreenPass {
     renderer.setRenderTarget(target);
     renderer.render(this.scene, FullscreenPass.camera);
   }
+
+  /**
+   * Compiles the shader without blocking the frame where the browser can (KHR_parallel_shader_compile).
+   * The program depends on the kind of target (canvas or render target): pass the one it will draw to.
+   */
+  compileAsync(renderer: THREE.WebGLRenderer, target: THREE.WebGLRenderTarget | null): Promise<unknown> {
+    const prev = renderer.getRenderTarget();
+    renderer.setRenderTarget(target);
+    const done = renderer.compileAsync(this.scene, FullscreenPass.camera);
+    renderer.setRenderTarget(prev);
+    return done;
+  }
 }
 
 export const FULLSCREEN_VERT = /* glsl */ `

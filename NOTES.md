@@ -12,7 +12,7 @@ not part of this repository.
 ## Run
 - `npm install`, then `npm run dev` (http://localhost:5173). `npm run build` / `npm run preview` for production.
 - `npm test`: vitest (pure TS: clipmap tiling and drawn-surface continuity, flat runways, water mirror,
-  the three flight models, grading, forest tiling, resolution scaling).
+  the three flight models, grading, forest tiling, resolution scaling, map view and coverage).
 - Browser checks (Playwright, headless Chromium on the real GPU through ANGLE/EGL; `ICARUS_GPU=swiftshader`
   forces software rendering):
   - `npm run parity`: GPU ↔ CPU terrain (GLSL vs TS, and the real clipmap meshes rasterised vs `drawnHeight()`)
@@ -20,10 +20,12 @@ not part of this repository.
   - `node scripts/modes.mjs`: ring run, mountain landing, crash
   - `node scripts/uishots.mjs`: menu → flight → pause → results flow, desktop and phone
   - `node scripts/fallbacks.mjs`: no WebGL2, no float render targets, logarithmic depth
+  - `node scripts/minimap.mjs`: the map image against the terrain, the HUD map heading-up (its pixels
+    against the terrain at three headings), M and its saved setting, re-baking at the edge, phone layout
   - `npm run shots`, `node scripts/planeshots.mjs`: screenshot matrices (`shots/`, git-ignored)
   - `node scripts/readme-shots.mjs`: regenerates the README screenshots in `docs/screenshots/`
   - `npm run smoke`: boots the game in the three pipelines (default, `nofloat`, `logdepth`) through the
-    menu, a flight, the cockpit and the ring run, failing on any console or shader error. CI runs it on
+    menu, a flight, the cockpit, the ring run and the map, failing on any console or shader error. CI runs it on
     the build with software WebGL: `ICARUS_PROD=1 ICARUS_GPU=swiftshader npm run smoke`
 - CI (`.github/workflows/ci.yml`, on pushes to `main` and pull requests): typecheck, unit tests, build,
   smoke test; on `main` it then deploys `dist/` to GitHub Pages (https://nayed.github.io/icarus/).
@@ -32,7 +34,7 @@ not part of this repository.
 - URL flags: `?q=low|medium|high`, `?t=dawn|day|golden|dusk|night|<hours>`, `?mode=free|rings|landing`
   with `&start=runway|water|air` (skips the menu), `?model=arcade|assisted|simulation`, `?noui`, `?nohud`,
   `?debug` (test API on `window.__icarus`), `?cam=x,y,z,yaw,pitch`, `?force=nowebgl2|nofloat|logdepth|noatlas`.
-- Preferences (mode, start, time, model, quality, sliders) persist in `localStorage`.
+- Preferences (mode, start, time, model, quality, sliders, map on/off) persist in `localStorage`.
 
 ## Controls (physical keys; the labels in the game follow your keyboard layout)
 | | |
@@ -47,6 +49,7 @@ not part of this repository.
 | Trim | Y / T |
 | Camera | C cycles; 1 chase, 2 cockpit, 3 cinematic; drag the mouse to look around |
 | Landing light | L |
+| Map | M (heading-up moving map; hidden in the cinematic camera; the choice is remembered) |
 | HUD / fullscreen | H / K |
 | Pause | Esc or P (in fullscreen, Esc leaves fullscreen and pauses the flight; P resumes) |
 | Restart | Backspace |
@@ -89,11 +92,23 @@ Menu: Enter flies; Esc on the results card goes back to the menu.
   (`EXT_disjoint_timer_query_webgl2`) where the browser exposes it. Otherwise it follows the frame
   interval and probes upward with exponential backoff, since a vsync-locked interval never shows headroom.
 
+## Map
+- `src/render/worldMap.ts` bakes a 2048² map image of a 49 km square (24 m per texel) on the GPU, from the
+  same `terrainHeight()` the world is drawn with: one pass writes heights (packed into RGBA8, so the LDR
+  path works too), a second shades them (the terrain shader's biomes, hill shading lit from the
+  north-west, sea by depth, a shoreline). 64 rows per frame, about 40 frames in all; the shader compiles
+  off the frame (`KHR_parallel_shader_compile`); the image is read back asynchronously (no stall) into an
+  `ImageBitmap`. The first map covers the fjords, the coast and every start point; when the aircraft
+  comes within 6 km of an edge, a new one is baked around it.
+- `src/ui/chart.ts` draws it (one view transform for the terrain, the strips, the gates and the
+  aircraft), shared by the HUD's moving map: heading-up, 4 km to the rim, top right. The next gate or
+  the landing aim point beyond the rim shows as a caret on the rim.
+
 ## Verification (this machine: Intel Lunar Lake iGPU, Linux, headless Chromium through ANGLE/EGL)
-- `npm test`: 38 tests pass. Coverage: for each flight model, takeoff, runway rest (< 1 mm drift),
+- `npm test`: 52 tests pass. Coverage: for each flight model, takeoff, runway rest (< 1 mm drift),
   coastal, mountain and water landings, water takeoff, drop tests (never below the drawn surface beyond
-  tyre compression), stall and recovery, gear-down water crash; plus grading, forest tiling and scaler
-  behaviour.
+  tyre compression), stall and recovery, gear-down water crash, speed limits, restarts; plus grading,
+  forest tiling, scaler behaviour, the map's view transform and what the first map covers.
 - Keyboard flight tests (real key events), all three models:
   - runway rest ≤ 0.16 mm drift in 10 s
   - keyboard takeoff (liftoff after 245–280 m at ~70 kt)
@@ -110,14 +125,24 @@ Menu: Enter flies; Esc on the results card goes back to the menu.
 - UI flow (menu → Enter → pause → slider → resume → results → menu) at 1920×1080 and 390×844. The menu
   fits from 1366×768 up; on shorter screens the settings scroll and Fly stays in view.
 - Fallbacks render with no console errors: `nowebgl2`, `nofloat`, `logdepth`, `nofloat,logdepth`.
+- Map: sea and land in the image match the CPU terrain at 99.95% of 6,359 samples (the rest are
+  shoreline texels); the HUD map's pixels agree with the terrain around the aircraft at headings 60°, 95°
+  and 253° (100%). Baking adds at most about 1 ms of GPU time per frame (within the benchmark's noise)
+  for about 40 frames; drawing the map adds 0.1–0.2 ms to the main thread.
 - Console: no errors, shader or GL errors, page errors or failed requests in any of the runs above.
-- Frame cost at 1920×1080 (GPU time by timer query, steady 16.7 ms frame interval in every view):
+- Frame cost at 1920×1080 (GPU time by timer query, steady 16.7 ms frame interval in every view),
+  remeasured with the moving map on 2026-10-20:
 
   | preset | GPU ms (7 views) | main thread ms |
   |---|---|---|
-  | high | 8.8 – 16.2 | ≤ 4.4 |
-  | medium | 5.6 – 10.5 | ≤ 3.2 |
-  | low (renders at 0.75×) | 2.7 – 5.7 | ≤ 3.1 |
+  | high | 9.2 – 16.4 | ≤ 5.6 |
+  | medium | 6.3 – 10.0 | ≤ 3.9 |
+  | low (renders at 0.75×) | 3.0 – 9.5 | ≤ 3.7 |
+
+  This laptop iGPU varies a lot from run to run with its clocks and temperature: an earlier session,
+  before the map, measured 8.8 – 16.2 / 5.6 – 10.5 / 2.7 – 5.7 ms on the GPU and ≤ 4.4 / 3.2 / 3.1 ms on
+  the main thread. Measured directly, in the same view with the map on and off, drawing the map costs
+  the main thread 0.1 – 0.2 ms.
 
 ## Not verified
 - Other GPUs (discrete NVIDIA/AMD, Apple, mobile), other browsers (Firefox, Safari) and Windows/macOS
@@ -134,3 +159,5 @@ Menu: Enter flies; Esc on the results card goes back to the menu.
   are resolved by moving the aircraft up without adding energy.
 - On the LDR fallback the clouds are a flat layer and the terrain has no self-shadowing.
 - Trees stream in nearest-first after a start (the nearest 500 m appear at once).
+- The map has 24 m texels and simplified biome colours (no detail finer than a texel). It is ready
+  within about a second on a GPU; with software rendering (SwiftShader) it takes 20–90 s.

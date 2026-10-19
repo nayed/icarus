@@ -12,7 +12,11 @@ const server = await startServer();
 const { browser, page, problems } = await launch({ width: W, height: H });
 const ev = (f, a) => page.evaluate(f, a);
 const save = async (name) => {
+  // hold the frame while it is captured: a capture can take several frames, and the camera moves on
+  // (the hero's mouse-look swing eases back after 1.5 s)
+  await ev(() => window.__icarus.setPaused(true));
   await page.screenshot({ path: path.join(OUT, `${name}.jpg`), type: 'jpeg', quality: 85 });
+  await ev(() => window.__icarus.setPaused(false));
   console.log('saved', name);
 };
 /** Free flight from a start point, camera mode, HUD on/off, simulated ahead by `advance` seconds. */
@@ -43,6 +47,15 @@ await page.waitForFunction(() => document.getElementById('boot').classList.conta
 await ev(() => {
   window.__icarus.setAutoScale(false);
   window.__icarus.setFixedDt(1 / 60);
+  // the clouds drift with every frame since boot, taken at real time steps: start them from the same
+  // place on every run (for one frame, then they drift on from there)
+  window.__icarus.setUniform('uCloudOffset', [0, 0]);
+  window.__icarus.setUniform('uTime', 0);
+});
+await waitFrames(page, 2);
+await ev(() => {
+  window.__icarus.setUniform('uCloudOffset', null);
+  window.__icarus.setUniform('uTime', null);
 });
 
 // hero: golden hour over the fjord

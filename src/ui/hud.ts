@@ -4,17 +4,9 @@ import * as THREE from 'three';
 import type { Telemetry } from '../sim/aircraft.ts';
 import type { ModeHud } from '../game/modes.ts';
 import { AIRCRAFT } from '../sim/config.ts';
-
-const ACC = '#7fdcc0';
-const ACC_RGB = '127,220,192';
-/** cautions and warnings stay warm so they stand out from the cool accent */
-const ALERT = '#f2a24b';
-const ALERT_RGB = '242,162,75';
-const INK = 'rgba(236,232,224,0.9)';
-const MUTED = 'rgba(236,232,224,0.55)';
-const FAINT = 'rgba(236,232,224,0.22)';
-const PANEL = 'rgba(9,12,16,0.34)';
-const FONT = '"Barlow Condensed", "Roboto Condensed", "Arial Narrow", sans-serif';
+import type { WorldMap } from '../render/worldMap.ts';
+import { ACC, ACC_RGB, ALERT, ALERT_RGB, INK, MUTED, FAINT, PANEL, FONT } from './palette.ts';
+import { drawTerrain, drawStrips, drawGates, drawAircraft, toScreen, label, type ChartView } from './chart.ts';
 
 export interface HudInput {
   tel: Telemetry;
@@ -30,7 +22,13 @@ export interface HudInput {
   windFrom: number;
   windKt: number;
   time: number;
+  /** the moving map: the map image, and whether to show it */
+  map: WorldMap | null;
+  showMap: boolean;
 }
+
+/** distance from the moving map's centre to its rim (m) */
+const MINIMAP_RANGE = 4000;
 
 const _v = new THREE.Vector3();
 
@@ -43,6 +41,8 @@ export class Hud {
   private cssH = 1;
   visible = true;
   private blink = 0;
+  /** screen box of the moving map this frame (keeps the target arrow off it) */
+  private mapBox: { x0: number; y0: number; x1: number; y1: number } | null = null;
 
   constructor(readonly canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d')!;
@@ -91,6 +91,8 @@ export class Hud {
     const spread = Math.min(W * 0.27, 330);
     const tapeH = cockpit ? Math.min(H * 0.26, 200) : Math.min(H * 0.38, 290);
 
+    this.mapBox = null;
+    if (i.showMap && i.map) this.minimap(i, small);
     if (i.cameraMode === 'cockpit') this.horizon(i, cx, cy);
     this.flightPath(i);
     if (i.mode?.target) this.target(i);
@@ -553,8 +555,14 @@ export class Hud {
       const rx = this.w / 2 - m;
       const ry = this.h / 2 - m;
       const k = Math.min(rx / Math.abs(Math.cos(ang) || 1e-6), ry / Math.abs(Math.sin(ang) || 1e-6));
-      const px = this.w / 2 + Math.cos(ang) * k;
-      const py = this.h / 2 + Math.sin(ang) * k;
+      let px = this.w / 2 + Math.cos(ang) * k;
+      let py = this.h / 2 + Math.sin(ang) * k;
+      // slide along the screen edge out from under the moving map
+      const b = this.mapBox;
+      if (b && px > b.x0 - 30 && py < b.y1 + 30) {
+        if (py <= m + 1) px = b.x0 - 30;
+        else py = b.y1 + 30;
+      }
       c.save();
       c.translate(px, py);
       c.rotate(ang);
@@ -627,6 +635,92 @@ export class Hud {
     this.halo(false);
     const d = l.dist > 950 ? `${(l.dist / 1000).toFixed(1)} KM` : `${Math.max(0, Math.round(l.dist))} M`;
     this.text(`THRESHOLD ${d}`, cx, ly + 22, 12.5, INK, 'center', 0.16);
+  }
+
+  /** Heading-up moving map in the top-right corner: terrain, strips, the course, the aircraft. */
+  private minimap(i: HudInput, small: boolean): void {
+    const c = this.ctx;
+    const d = small ? 96 : Math.round(Math.min(168, Math.max(128, this.h * 0.21)));
+    const r = d / 2;
+    const cx = this.w - (small ? 16 : 34) - r;
+    const cy = (small ? 16 : 34) + r;
+    this.mapBox = { x0: cx - r, y0: cy - r, x1: cx + r, y1: cy + r };
+    const hdg = (i.tel.heading * Math.PI) / 180;
+    const view: ChartView = { sx: cx, sy: cy, wx: i.aircraftPos.x, wz: i.aircraftPos.z, scale: r / MINIMAP_RANGE, up: hdg };
+    const mm = i.mode?.map;
+    c.save();
+    c.beginPath();
+    c.arc(cx, cy, r, 0, Math.PI * 2);
+    c.fillStyle = 'rgba(9,12,16,0.62)';
+    c.fill();
+    c.clip();
+    c.globalAlpha = 0.92;
+    drawTerrain(c, i.map!, view);
+    c.globalAlpha = 1;
+    // glass edge: the map darkens towards the rim
+    const g = c.createRadialGradient(cx, cy, r * 0.55, cx, cy, r);
+    g.addColorStop(0, 'rgba(9,12,16,0)');
+    g.addColorStop(1, 'rgba(9,12,16,0.5)');
+    c.fillStyle = g;
+    c.fillRect(cx - r, cy - r, d, d);
+    // half-range ring
+    c.strokeStyle = 'rgba(236,232,224,0.16)';
+    c.lineWidth = 1;
+    c.setLineDash([2, 4]);
+    c.beginPath();
+    c.arc(cx, cy, r / 2, 0, Math.PI * 2);
+    c.stroke();
+    c.setLineDash([]);
+    // heading line: the map turns with the aircraft, straight up is where it is going
+    c.strokeStyle = `rgba(${ACC_RGB},0.4)`;
+    c.beginPath();
+    c.moveTo(cx, cy - 14);
+    c.lineTo(cx, cy - r);
+    c.stroke();
+    drawStrips(c, view, mm?.strip ?? -1);
+    if (mm?.gates && mm.gateStates) drawGates(c, view, mm.gates, mm.gateStates);
+    c.restore();
+    c.strokeStyle = 'rgba(255,255,255,0.16)';
+    c.lineWidth = 1;
+    c.beginPath();
+    c.arc(cx, cy, r, 0, Math.PI * 2);
+    c.stroke();
+    // the next target when it lies beyond the rim: a caret on the rim, pointing at it
+    const t = i.mode?.target;
+    if (t) {
+      const b = ((i.tel.heading + t.bearing) * Math.PI) / 180;
+      const hd = t.dist * Math.cos((t.elevation * Math.PI) / 180);
+      const [tx, ty] = toScreen(view, i.aircraftPos.x + Math.sin(b) * hd, i.aircraftPos.z - Math.cos(b) * hd);
+      const off = Math.hypot(tx - cx, ty - cy);
+      if (off > r - 6) {
+        const a = Math.atan2(ty - cy, tx - cx);
+        c.save();
+        c.translate(cx + Math.cos(a) * (r - 7), cy + Math.sin(a) * (r - 7));
+        c.rotate(a);
+        c.beginPath();
+        c.moveTo(5, 0);
+        c.lineTo(-4, -5.5);
+        c.lineTo(-4, 5.5);
+        c.closePath();
+        c.fillStyle = ACC;
+        this.halo(true);
+        c.fill();
+        this.halo(false);
+        c.restore();
+      }
+    }
+    // north on the rim
+    const nx = cx - Math.sin(hdg) * r;
+    const ny = cy - Math.cos(hdg) * r;
+    c.fillStyle = 'rgba(9,12,16,0.85)';
+    c.beginPath();
+    c.arc(nx, ny, small ? 8 : 9, 0, Math.PI * 2);
+    c.fill();
+    c.strokeStyle = 'rgba(255,255,255,0.16)';
+    c.stroke();
+    label(c, 'N', nx + 0.5, ny + 0.5, small ? 10.5 : 12, INK);
+    if (!small) label(c, `${MINIMAP_RANGE / 2000} KM`, cx, cy + r / 2 + 9, 10, MUTED);
+    drawAircraft(c, cx, cy, 0, small ? 19 : 24);
   }
 
   private modeWidget(m: ModeHud, small: boolean): void {

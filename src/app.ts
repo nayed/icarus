@@ -22,6 +22,7 @@ import { STRIPS, SEA_LEVEL } from './world/params.ts';
 import { createMode, type GameMode, type ModeKind } from './game/modes.ts';
 import type { ModeResult } from './game/grading.ts';
 import { Hud } from './ui/hud.ts';
+import { prefs, savePrefs } from './ui/prefs.ts';
 
 /** What the app needs from the DOM user interface. */
 export interface UiHooks {
@@ -63,6 +64,8 @@ export class App {
   settings: FlightSettings = { model: 'assisted', timeOfDay: TIME_PRESETS.dusk, timeFlow: 0.5, windFrom: 40, windSpeed: 4, clouds: 0.45, volume: 0.7 };
   lampOn = false;
   hudVisible = true;
+  /** the HUD's moving map (M) */
+  mapVisible = true;
   /** main-thread time of the last frame (ms) */
   cpuMs = 0;
   /** when leaving fullscreen last paused the flight (performance.now) */
@@ -344,6 +347,12 @@ export class App {
       this.audio.click();
       this.ui?.toast(`Landing light <i>·</i> ${this.lampOn ? 'on' : 'off'}`);
     } else if (a === 'hud') this.hudVisible = !this.hudVisible;
+    else if (a === 'map') {
+      this.mapVisible = !this.mapVisible;
+      prefs.minimap = this.mapVisible;
+      savePrefs();
+      this.ui?.toast(`Map <i>·</i> ${this.mapVisible ? 'on' : 'off'}`);
+    }
     else if (a === 'gear') {
       this.audio.motor(4);
       this.ui?.toast(`Gear <i>·</i> ${this.controls.input.gearDown ? 'down' : 'up'}`);
@@ -420,6 +429,7 @@ export class App {
       this.ui?.showResults(this.session.result);
     }
     for (const f of this.onFrame) f(dt);
+    this.world.map.follow(this.drawPos.x, this.drawPos.z);
     this.world.render(dt);
     if (this.state === 'flying' && this.hudVisible && this.session && this.session.kind !== 'attract') {
       this.hud.draw(
@@ -437,6 +447,9 @@ export class App {
           windFrom: this.settings.windFrom,
           windKt: this.settings.windSpeed * 1.944,
           time: this.simTime,
+          map: this.world.map,
+          // the cinematic camera is for watching: no map there
+          showMap: this.mapVisible && (this.freeCamera || this.rig.mode !== 'cinematic'),
         },
         dt,
       );

@@ -199,6 +199,45 @@ export function installDebugHooks(app: App): void {
       overrides.set(name, value);
       if (value === null) overrides.delete(name);
     },
+    /** The map image baked for the HUD and the pause screen. */
+    map: {
+      ready: () => !!w.map.image,
+      info: () => ({ bakes: w.map.bakes, phase: w.map.phase, x0: w.map.x0, z0: w.map.z0, extent: w.map.extent, rowsPerFrame: w.map.rowsPerFrame }),
+      rebake: (x: number, z: number) => w.map.rebake(x, z),
+      /**
+       * Samples the image on an n×n grid and compares sea and land with the CPU terrain (texels within
+       * 12 m of sea level are skipped: the shoreline is blended there). Checks the bake and its orientation.
+       */
+      check(n = 60) {
+        const m = w.map;
+        if (!m.image) return null;
+        const size = m.image.width;
+        const cv = new OffscreenCanvas(size, size);
+        const ctx = cv.getContext('2d')!;
+        ctx.drawImage(m.image, 0, 0);
+        const px = ctx.getImageData(0, 0, size, size).data;
+        const texel = m.extent / size;
+        let tested = 0;
+        let agree = 0;
+        const misses: [number, number, number][] = [];
+        for (let j = 0; j < n; j++) {
+          for (let i = 0; i < n; i++) {
+            const ti = Math.floor(((i + 0.5) / n) * size);
+            const tj = Math.floor(((j + 0.5) / n) * size);
+            const x = m.x0 + (ti + 0.5) * texel;
+            const z = m.z0 + (tj + 0.5) * texel;
+            const h = terrainHeight(x, z, 7);
+            if (Math.abs(h) < 12) continue;
+            const o = 4 * (tj * size + ti);
+            const sea = px[o] < 40 && px[o + 2] - px[o] > 15;
+            tested++;
+            if (sea === h < 0) agree++;
+            else if (misses.length < 5) misses.push([Math.round(x), Math.round(z), Math.round(h)]);
+          }
+        }
+        return { tested, agree: agree / Math.max(1, tested), misses };
+      },
+    },
     terrainHeight: (x: number, z: number, oct = TERRAIN_OCTAVES) => terrainHeight(x, z, oct),
     drawnHeight: (x: number, z: number) => drawnHeight(x, z, w.clip),
     info() {

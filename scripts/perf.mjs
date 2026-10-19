@@ -21,6 +21,8 @@ let gpuAvailable = true;
 for (const q of (args.q ?? 'high,medium,low').split(',')) {
   await page.goto(`${server.url}?debug&noui&q=${q}&t=${args.t ?? 'golden'}`);
   await waitFrames(page, 3, 180000);
+  // the map image bakes in the background over the first frames: measure after it
+  await page.waitForFunction(() => window.__icarus.map.ready(), null, { timeout: 120000 });
   await page.evaluate(() => window.__icarus.setAutoScale(false));
   for (const [name, v] of VIEWS) {
     await page.evaluate((v) => {

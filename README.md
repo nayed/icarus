@@ -43,6 +43,8 @@ and its instrument panel, even the engine sound. There are no models, textures o
   and overspeed protection to real aerodynamics, and *Simulation* leaves it all to you.
 - **Chase, cockpit and cinematic cameras**, and a HUD with airspeed (knots), altitude (feet), heading,
   vertical speed (feet per minute) and throttle, with stall and overspeed warnings.
+- **A moving map** in the corner of the HUD that turns with the aircraft: the terrain, the airstrips and
+  the ring-run gates. It is drawn from the same terrain function on the GPU, and M hides it.
 
 ![The cockpit at the end of the day, instruments lit](docs/screenshots/cockpit.jpg)
 
@@ -74,7 +76,7 @@ and its instrument panel, even the engine sound. There are no models, textures o
 | Trim | Y / T |
 | Camera | C to cycle, or 1 chase, 2 cockpit, 3 cinematic; drag the mouse to look around |
 | Landing light | L |
-| HUD / fullscreen | H / K |
+| Map / HUD / fullscreen | M / H / K |
 | Pause | Esc or P (in fullscreen, Esc leaves fullscreen and pauses the flight; P resumes) |
 | Restart | Backspace |
 

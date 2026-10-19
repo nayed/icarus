@@ -1,6 +1,7 @@
 import { detectCapabilities } from './render/capabilities.ts';
 import { App } from './app.ts';
-import { UI, loadPrefs } from './ui/ui.ts';
+import { UI } from './ui/ui.ts';
+import { prefs } from './ui/prefs.ts';
 import { loadKeyboardLayout } from './input/controls.ts';
 import './ui/styles.css';
 
@@ -37,7 +38,6 @@ async function start(): Promise<void> {
     new Promise((r) => setTimeout(r, 1500)),
   ]);
   await loadKeyboardLayout();
-  const prefs = loadPrefs();
   const canvas = document.getElementById('scene') as HTMLCanvasElement;
   let app: App;
   try {
@@ -60,6 +60,7 @@ async function start(): Promise<void> {
   canvas.addEventListener('webglcontextrestored', () => location.reload());
 
   Object.assign(app.settings, { model: prefs.model, volume: prefs.volume, clouds: prefs.clouds, windFrom: prefs.windFrom, windSpeed: prefs.windSpeed });
+  app.mapVisible = prefs.minimap;
   const q = new URLSearchParams(location.search);
   if (!q.has('t')) app.settings.timeOfDay = { dawn: 5.85, day: 12, golden: 16.55, dusk: 18.15, night: 22.6 }[prefs.time];
   if (q.get('model')) app.settings.model = q.get('model') as typeof prefs.model;

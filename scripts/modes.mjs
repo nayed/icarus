@@ -27,7 +27,7 @@ const metrics = (r) => r.metrics.map((m) => `${m.label} ${m.value}`).join(', ');
 console.log('\n== ring run, autopilot through the gates');
 await open('rings');
 let hud = await page.evaluate(() => window.__icarus.session.hud());
-check(hud?.target && hud.timer === '0:00.00', `HUD before the first gate: ${JSON.stringify(hud)}`);
+check(hud?.target && hud.timer === '0:00.00' && hud.map?.gates?.length === 14 && hud.map.gateStates[0] === 1, `HUD before the first gate: ${JSON.stringify({ ...hud, map: `${hud?.map?.gates?.length} gates, the first one next` })}`);
 await page.evaluate(() => window.__icarus.session.autoRings(0));
 let shots = 0;
 let r = await waitResult(240000, async () => {

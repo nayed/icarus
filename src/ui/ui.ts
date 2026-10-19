@@ -8,41 +8,7 @@ import { formatTime } from '../game/grading.ts';
 import { actionLabel, keyLabel, type Action } from '../input/controls.ts';
 import { buildCourse, coursePar } from '../game/course.ts';
 import { toggleFullscreen } from '../app.ts';
-
-export type MenuMode = 'free' | 'rings' | 'landing';
-
-export interface Prefs {
-  mode: MenuMode;
-  start: StartPoint;
-  time: TimePreset;
-  model: FlightModel;
-  quality: QualityName;
-  volume: number;
-  clouds: number;
-  windFrom: number;
-  windSpeed: number;
-}
-
-const DEFAULTS: Prefs = { mode: 'free', start: 'runway', time: 'dusk', model: 'assisted', quality: 'medium', volume: 0.7, clouds: 0.45, windFrom: 40, windSpeed: 4 };
-const KEY = 'icarus.prefs.v1';
-
-export function loadPrefs(): Prefs {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (raw) return { ...DEFAULTS, ...(JSON.parse(raw) as Partial<Prefs>) };
-  } catch {
-    // storage can be unavailable (private mode, blocked site data)
-  }
-  return { ...DEFAULTS };
-}
-
-function savePrefs(p: Prefs): void {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(p));
-  } catch {
-    // ignore
-  }
-}
+import { prefs, savePrefs, type MenuMode, type Prefs } from './prefs.ts';
 
 const MODE_INFO: Record<MenuMode, { t: string; d: () => string }> = {
   free: { t: 'Free flight', d: () => 'No clock, no score. Take off from the strip, the water or the air.' },
@@ -72,7 +38,8 @@ const KEY_ROWS: [string, Action[]][] = [
   ['Trim', ['trimUp', 'trimDown']],
   ['Camera', ['camera', 'camChase', 'camCockpit', 'camCinematic']],
   ['Landing light', ['light']],
-  ['HUD · fullscreen', ['hud', 'fullscreen']],
+  ['Map · HUD', ['map', 'hud']],
+  ['Fullscreen', ['fullscreen']],
   ['Pause', ['pause']],
   ['Restart', ['restart']],
 ];
@@ -99,7 +66,7 @@ export class UI {
   private readonly caption: HTMLElement;
 
   constructor(private readonly root: HTMLElement, private readonly app: App) {
-    this.prefs = loadPrefs();
+    this.prefs = prefs;
     root.innerHTML = `
       <section class="screen menu hidden" data-screen="menu">
         <div class="scrim"></div>
@@ -270,7 +237,7 @@ export class UI {
     else if (k === 'volume') s.volume = v;
     this.app.applySettings();
     Object.assign(this.prefs, { volume: s.volume, clouds: s.clouds, windFrom: s.windFrom, windSpeed: s.windSpeed });
-    savePrefs(this.prefs);
+    savePrefs();
     this.syncSliders();
   }
 
@@ -346,7 +313,7 @@ export class UI {
       p.quality = value as QualityName;
       this.app.setQuality(p.quality);
     }
-    savePrefs(p);
+    savePrefs();
     this.renderMenu();
   }
 

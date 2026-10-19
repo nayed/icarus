@@ -11,6 +11,7 @@ import { globals } from '../render/globals.ts';
 import { ATMOSPHERE_GLSL, SKYVIEW_SAMPLE_GLSL } from '../render/atmosphere.ts';
 import { GLOBALS_GLSL } from '../render/globals.ts';
 import { OUTPUT_GLSL } from '../render/post.ts';
+import type { ModeMap } from '../ui/chart.ts';
 
 export type ModeKind = 'free' | 'rings' | 'landing' | 'attract';
 
@@ -25,6 +26,8 @@ export interface ModeHud {
   landing?: { dist: number; glideDev: number; centreDev: number; targetKt: number };
   prompt?: string;
   promptTone?: 'info' | 'warn' | 'good';
+  /** what the maps show for this mode */
+  map?: ModeMap;
 }
 
 export abstract class GameMode {
@@ -312,6 +315,7 @@ export class RingRun extends GameMode {
       title: 'Ring run',
       timer: formatTime(elapsed + this.missed * this.penalty),
       timerSub: `Gate ${Math.min(this.next + 1, this.gates.length)} / ${this.gates.length}${this.missed ? ` · ${this.missed} missed` : ''}`,
+      map: { gates: this.gates, gateStates: this.states },
       ...this.currentPrompt(),
     };
     const g = this.gates[this.next];
@@ -420,6 +424,7 @@ export class MountainLanding extends GameMode {
       title: 'Mountain landing',
       landing: this.td ? undefined : { dist: toThr, glideDev: ac.pos.y - want, centreDev: local.across, targetKt: 58 },
       target: this.td ? undefined : { label: 'AIM', ...this.aim(thx, s.elevation + 1, thz) },
+      map: { strip: STRIPS.indexOf(s) },
       ...this.currentPrompt(),
     };
   }

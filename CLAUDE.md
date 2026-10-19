@@ -20,6 +20,7 @@ live in NOTES.md; keep them current when behaviour changes.
   - `node scripts/modes.mjs`: ring run, mountain landing, crash
   - `node scripts/uishots.mjs`: menu → flight → pause → results flow, desktop and phone
   - `node scripts/fallbacks.mjs`: `?force=nowebgl2|nofloat|logdepth`
+  - `node scripts/minimap.mjs`: the map image and the HUD's moving map
   - `npm run perf`: GPU time from timer queries, main-thread time, frame interval
   - `npm run smoke`: what CI runs in the browser (all three pipelines, fails on console/shader errors)
   - `npm run shots`, `node scripts/planeshots.mjs [--hud]`: screenshots into `shots/` (git-ignored)
@@ -57,7 +58,8 @@ live in NOTES.md; keep them current when behaviour changes.
 
 ## Design decisions to keep
 - UI: dark glass panels, Barlow Condensed for display type, Barlow for body text, and one accent:
-  aurora mint `#7fdcc0` (`--accent`/`--accent-rgb` in `src/ui/styles.css`, `ACC` in `src/ui/hud.ts`).
+  aurora mint `#7fdcc0` (`--accent`/`--accent-rgb` in `src/ui/styles.css`, `ACC` in `src/ui/palette.ts`
+  for the canvases).
 - Warnings and error screens stay amber (`--alert`, `ALERT`) so they stand out from the accent.
 - The cockpit instruments stay amber, and the aircraft's orange livery is orange on purpose (chosen by
   the user): do not recolour either to mint.
