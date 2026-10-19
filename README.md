@@ -43,8 +43,9 @@ and its instrument panel, even the engine sound. There are no models, textures o
   and overspeed protection to real aerodynamics, and *Simulation* leaves it all to you.
 - **Chase, cockpit and cinematic cameras**, and a HUD with airspeed (knots), altitude (feet), heading,
   vertical speed (feet per minute) and throttle, with stall and overspeed warnings.
-- **A moving map** in the corner of the HUD that turns with the aircraft: the terrain, the airstrips and
-  the ring-run gates. It is drawn from the same terrain function on the GPU, and M hides it.
+- **Maps**, drawn from the same terrain function on the GPU: a moving map in the corner of the HUD that
+  turns with the aircraft (M hides it), and on the pause screen a chart of the fjord with the airstrips,
+  the ring-run gates and the track you have flown, which you can zoom and drag.
 
 ![The cockpit at the end of the day, instruments lit](docs/screenshots/cockpit.jpg)
 

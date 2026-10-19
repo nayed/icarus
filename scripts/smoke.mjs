@@ -1,7 +1,7 @@
 // Smoke test for CI: boots the game in headless Chromium and fails on any console, shader or page
 // error. Shaders only compile in a browser, so this catches what typecheck, unit tests and the build
 // cannot. Runs the three pipeline variants (HDR with reversed-Z, no float render targets, logarithmic
-// depth) through the menu, a flight in the chase and cockpit views, the ring run and the map.
+// depth) through the menu, a flight in the chase and cockpit views, the ring run, the maps and pause.
 // Software WebGL is enough: ICARUS_GPU=swiftshader. Against the build: npm run build, ICARUS_PROD=1.
 // usage: node scripts/smoke.mjs
 import { startServer, launch, waitFrames, report } from './harness.mjs';
@@ -35,6 +35,11 @@ for (const force of ['', 'nofloat', 'logdepth']) {
     await waitFrames(page, 10, T);
     check(await page.evaluate(() => window.__icarus.session.hud()?.title === 'Ring run'), 'ring run renders');
     check(await page.evaluate(() => !!window.app.hud.mapBox), 'minimap drawn');
+    await page.keyboard.press('KeyP');
+    await waitFrames(page, 2, T);
+    check(await page.evaluate(() => window.__icarus.session.state() === 'paused' && window.app.ui.pauseMap.open), 'P pauses, the pause screen shows the chart');
+    await page.keyboard.press('KeyP');
+    await waitFrames(page, 2, T);
     // the map image is baked in the background, a slice per frame. Its passes are the same in every
     // pipeline (8-bit targets, no depth), and in software rendering the slower ones take minutes to
     // finish it: wait for it in the default pipeline only

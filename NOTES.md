@@ -20,12 +20,14 @@ not part of this repository.
   - `node scripts/modes.mjs`: ring run, mountain landing, crash
   - `node scripts/uishots.mjs`: menu → flight → pause → results flow, desktop and phone
   - `node scripts/fallbacks.mjs`: no WebGL2, no float render targets, logarithmic depth
-  - `node scripts/minimap.mjs`: the map image against the terrain, the HUD map heading-up (its pixels
-    against the terrain at three headings), M and its saved setting, re-baking at the edge, phone layout
+  - `node scripts/maps.mjs`: the map image against the terrain, the HUD map heading-up (its pixels
+    against the terrain at three headings), M and its saved setting, re-baking at the edge, phone layout;
+    the pause screen's chart (readouts, zoom about the cursor, drag, buttons, track, layouts)
   - `npm run shots`, `node scripts/planeshots.mjs`: screenshot matrices (`shots/`, git-ignored)
   - `node scripts/readme-shots.mjs`: regenerates the README screenshots in `docs/screenshots/`
   - `npm run smoke`: boots the game in the three pipelines (default, `nofloat`, `logdepth`) through the
-    menu, a flight, the cockpit, the ring run and the map, failing on any console or shader error. CI runs it on
+    menu, a flight, the cockpit, the ring run, the maps and the pause screen, failing on any console or
+    shader error. CI runs it on
     the build with software WebGL: `ICARUS_PROD=1 ICARUS_GPU=swiftshader npm run smoke`
 - CI (`.github/workflows/ci.yml`, on pushes to `main` and pull requests): typecheck, unit tests, build,
   smoke test; on `main` it then deploys `dist/` to GitHub Pages (https://nayed.github.io/icarus/).
@@ -51,7 +53,7 @@ not part of this repository.
 | Landing light | L |
 | Map | M (heading-up moving map; hidden in the cinematic camera; the choice is remembered) |
 | HUD / fullscreen | H / K |
-| Pause | Esc or P (in fullscreen, Esc leaves fullscreen and pauses the flight; P resumes) |
+| Pause | Esc or P (in fullscreen, Esc leaves fullscreen and pauses the flight; P resumes). The pause screen has the chart: scroll or + / − to zoom, drag to move, double-click or ◎ for the aircraft |
 | Restart | Backspace |
 
 Menu: Enter flies; Esc on the results card goes back to the menu.
@@ -101,14 +103,21 @@ Menu: Enter flies; Esc on the results card goes back to the menu.
   `ImageBitmap`. The first map covers the fjords, the coast and every start point; when the aircraft
   comes within 6 km of an edge, a new one is baked around it.
 - `src/ui/chart.ts` draws it (one view transform for the terrain, the strips, the gates and the
-  aircraft), shared by the HUD's moving map: heading-up, 4 km to the rim, top right. The next gate or
-  the landing aim point beyond the rim shows as a caret on the rim.
+  aircraft), for two maps:
+  - the HUD's moving map: heading-up, 4 km to the rim, top right. The next gate or the landing aim point
+    beyond the rim shows as a caret on the rim.
+  - the pause screen's chart (`src/ui/pauseMap.ts`): north up, opens on the aircraft 18 km across
+    (3 to 48 km), with the strips by name, the ring-run gates by number, a 5 km grid, a scale bar and
+    the track flown this session (`src/game/track.ts`: a point every 25 m, the last 100 km). Above it,
+    the distance and bearing from the aircraft to the point under the cursor, or else to the next gate,
+    the landing strip or the nearest strip. Beside the settings on wide screens, below them under 900 px.
 
 ## Verification (this machine: Intel Lunar Lake iGPU, Linux, headless Chromium through ANGLE/EGL)
-- `npm test`: 52 tests pass. Coverage: for each flight model, takeoff, runway rest (< 1 mm drift),
+- `npm test`: 56 tests pass. Coverage: for each flight model, takeoff, runway rest (< 1 mm drift),
   coastal, mountain and water landings, water takeoff, drop tests (never below the drawn surface beyond
   tyre compression), stall and recovery, gear-down water crash, speed limits, restarts; plus grading,
-  forest tiling, scaler behaviour, the map's view transform and what the first map covers.
+  forest tiling, scaler behaviour, the map's view transform, readouts and track, and what the first map
+  covers.
 - Keyboard flight tests (real key events), all three models:
   - runway rest ≤ 0.16 mm drift in 10 s
   - keyboard takeoff (liftoff after 245–280 m at ~70 kt)
@@ -128,7 +137,10 @@ Menu: Enter flies; Esc on the results card goes back to the menu.
 - Map: sea and land in the image match the CPU terrain at 99.95% of 6,359 samples (the rest are
   shoreline texels); the HUD map's pixels agree with the terrain around the aircraft at headings 60°, 95°
   and 253° (100%). Baking adds at most about 1 ms of GPU time per frame (within the benchmark's noise)
-  for about 40 frames; drawing the map adds 0.1–0.2 ms to the main thread.
+  for about 40 frames; drawing the map adds 0.1–0.2 ms to the main thread. The pause chart opens on the
+  aircraft, its readouts match the expected distance and bearing, scrolling zooms about the cursor (the
+  point under it stays within 0.01 m), dragging follows the pointer to the pixel, and it sits beside the
+  settings at 1600×900 and 1280×720 and below them at 860×900.
 - Console: no errors, shader or GL errors, page errors or failed requests in any of the runs above.
 - Frame cost at 1920×1080 (GPU time by timer query, steady 16.7 ms frame interval in every view),
   remeasured with the moving map on 2026-10-20:

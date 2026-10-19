@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { toScreen, toWorld, screenAngle, type ChartView } from '../src/ui/chart.ts';
+import { toScreen, toWorld, screenAngle, bearingDeg, formatDistance, rangeAndBearing, scaleBarLength, type ChartView } from '../src/ui/chart.ts';
+import { Track } from '../src/game/track.ts';
 import { MAP_EXTENT, MAP_HOME, MAP_TEXEL, mapCovers, mapRegionAround } from '../src/render/worldMap.ts';
 import { FJORDS, STRIPS, headingDir } from '../src/world/params.ts';
 import { buildCourse } from '../src/game/course.ts';
@@ -76,5 +77,46 @@ describe('map region', () => {
     const d = headingDir(m.heading);
     pts.push([m.center[0] - d[0] * (m.halfLength + 4200), m.center[1] - d[1] * (m.halfLength + 4200)]);
     for (const [x, z] of pts) expect(mapCovers(home.x0, home.z0, x, z), `(${x}, ${z})`).toBe(true);
+  });
+});
+
+describe('readouts', () => {
+  it('bearings are compass bearings', () => {
+    expect(bearingDeg(0, -1)).toBeCloseTo(0);
+    expect(bearingDeg(1, 0)).toBeCloseTo(90);
+    expect(bearingDeg(0, 1)).toBeCloseTo(180);
+    expect(bearingDeg(-1, 0)).toBeCloseTo(270);
+    expect(bearingDeg(-1, -1)).toBeCloseTo(315);
+  });
+
+  it('formats distance and bearing', () => {
+    expect(formatDistance(447)).toBe('450 m');
+    expect(formatDistance(6340)).toBe('6.3 km');
+    expect(rangeAndBearing(100, 100, 100 + 3000 * Math.sin(DEG * 45), 100 - 3000 * Math.cos(DEG * 45))).toBe('3.0 km · 045°');
+    // due north, a hair west: 360 is shown as 000
+    expect(rangeAndBearing(0, 0, -0.001, -500)).toBe('500 m · 000°');
+  });
+
+  it('picks round scale-bar lengths', () => {
+    expect(scaleBarLength(4300)).toBe(5000);
+    expect(scaleBarLength(1300)).toBe(1000);
+    expect(scaleBarLength(160)).toBe(200);
+    expect(scaleBarLength(16000)).toBe(20000);
+  });
+});
+
+describe('track', () => {
+  it('keeps a point every `spacing` metres, and only the latest `max`', () => {
+    const t = new Track(5, 25);
+    t.add(0, 0);
+    t.add(10, 0); // too close: skipped
+    t.add(30, 0);
+    expect(t.count).toBe(2);
+    for (let k = 2; k <= 8; k++) t.add(k * 30, 0);
+    expect(t.count).toBe(5);
+    expect(t.point(0)).toEqual([120, 0]);
+    expect(t.point(4)).toEqual([240, 0]);
+    t.reset();
+    expect(t.count).toBe(0);
   });
 });

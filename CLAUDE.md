@@ -20,7 +20,7 @@ live in NOTES.md; keep them current when behaviour changes.
   - `node scripts/modes.mjs`: ring run, mountain landing, crash
   - `node scripts/uishots.mjs`: menu → flight → pause → results flow, desktop and phone
   - `node scripts/fallbacks.mjs`: `?force=nowebgl2|nofloat|logdepth`
-  - `node scripts/minimap.mjs`: the map image and the HUD's moving map
+  - `node scripts/maps.mjs`: the map image, the HUD's moving map and the pause screen's chart
   - `npm run perf`: GPU time from timer queries, main-thread time, frame interval
   - `npm run smoke`: what CI runs in the browser (all three pipelines, fails on console/shader errors)
   - `npm run shots`, `node scripts/planeshots.mjs [--hud]`: screenshots into `shots/` (git-ignored)

@@ -20,6 +20,7 @@ import { drawnHeight, makeClipState } from './world/clipmap.ts';
 import { AIRCRAFT } from './sim/config.ts';
 import { STRIPS, SEA_LEVEL } from './world/params.ts';
 import { createMode, type GameMode, type ModeKind } from './game/modes.ts';
+import { Track } from './game/track.ts';
 import type { ModeResult } from './game/grading.ts';
 import { Hud } from './ui/hud.ts';
 import { prefs, savePrefs } from './ui/prefs.ts';
@@ -66,6 +67,8 @@ export class App {
   hudVisible = true;
   /** the HUD's moving map (M) */
   mapVisible = true;
+  /** where the aircraft has flown this session (the pause screen's chart) */
+  readonly track = new Track();
   /** main-thread time of the last frame (ms) */
   cpuMs = 0;
   /** when leaving fullscreen last paused the flight (performance.now) */
@@ -257,6 +260,7 @@ export class App {
     this.sessionKind = kind;
     this.sessionStart = start;
     this.ac.onTouchdown = null;
+    this.track.reset();
     this.session = createMode(this, kind, start);
     this.session.begin();
     // a new spot re-bakes the terrain around the camera: do not read that as the GPU being slow
@@ -407,6 +411,7 @@ export class App {
       this.world.timeOfDay = (this.world.timeOfDay + (this.settings.timeFlow * dt) / 60 + 24) % 24;
       this.settings.timeOfDay = this.world.timeOfDay;
     }
+    if (flying) this.track.add(this.ac.pos.x, this.ac.pos.z);
     const alpha = simulate ? this.acc / SIM_DT : 1;
     this.drawPos.lerpVectors(this.prevPos, this.ac.pos, alpha);
     this.drawQuat.slerpQuaternions(this.prevQuat, this.ac.q, alpha);

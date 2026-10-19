@@ -9,6 +9,7 @@ import { actionLabel, keyLabel, type Action } from '../input/controls.ts';
 import { buildCourse, coursePar } from '../game/course.ts';
 import { toggleFullscreen } from '../app.ts';
 import { prefs, savePrefs, type MenuMode, type Prefs } from './prefs.ts';
+import { PauseMap } from './pauseMap.ts';
 
 const MODE_INFO: Record<MenuMode, { t: string; d: () => string }> = {
   free: { t: 'Free flight', d: () => 'No clock, no score. Take off from the strip, the water or the air.' },
@@ -64,6 +65,7 @@ export class UI {
   private readonly results: HTMLElement;
   private readonly toasts: HTMLElement;
   private readonly caption: HTMLElement;
+  private readonly pauseMap: PauseMap;
 
   constructor(private readonly root: HTMLElement, private readonly app: App) {
     this.prefs = prefs;
@@ -98,6 +100,19 @@ export class UI {
       </section>
       <section class="screen hidden" data-screen="pause">
         <div class="scrim"></div>
+        <div class="pause-layout">
+        <div class="map-panel glass" data-pause-map>
+          <div class="map-head"><span class="label">Map</span><span class="map-readout" data-map-readout aria-live="polite"></span></div>
+          <div class="map-frame">
+            <canvas aria-label="Map of the fjord, north up, with the aircraft"></canvas>
+            <div class="map-tools">
+              <button type="button" data-map="in" aria-label="Zoom in" title="Zoom in">+</button>
+              <button type="button" data-map="out" aria-label="Zoom out" title="Zoom out">−</button>
+              <button type="button" data-map="centre" aria-label="Back to the aircraft" title="Back to the aircraft">◎</button>
+            </div>
+          </div>
+          <div class="map-foot">Scroll to zoom · drag to move · double-click for the aircraft</div>
+        </div>
         <div class="modal glass" role="dialog" aria-label="Paused">
           <h2>Paused</h2>
           <div class="sub" data-pause-sub></div>
@@ -119,6 +134,7 @@ export class UI {
             <button class="btn" data-act="fullscreen">Fullscreen</button>
           </div>
         </div>
+        </div>
       </section>
       <section class="screen hidden" data-screen="results">
         <div class="scrim"></div>
@@ -132,6 +148,7 @@ export class UI {
     this.results = q('[data-screen="results"]');
     this.toasts = q('[data-toasts]');
     this.caption = q('.caption');
+    this.pauseMap = new PauseMap(q('[data-pause-map]'), app);
     if (matchMedia('(pointer: coarse)').matches) (q('[data-touch]') as HTMLElement).hidden = false;
     this.renderMenu();
     this.renderKeys();
@@ -250,6 +267,7 @@ export class UI {
     this.syncSliders();
     this.renderMenu();
     this.pause.classList.remove('hidden');
+    this.pauseMap.show();
   }
 
   // ---------------------------------------------------------------- results
@@ -281,6 +299,7 @@ export class UI {
   hideAll(): void {
     for (const s of [this.menu, this.pause, this.results]) s.classList.add('hidden');
     this.controlsSheet.classList.add('hidden');
+    this.pauseMap.hide();
   }
 
   // ---------------------------------------------------------------- toasts

@@ -45,6 +45,27 @@ export function toWorld(v: ChartView, px: number, py: number): [number, number] 
   return [v.wx + (a * c - b * s) / v.scale, v.wz + (a * s + b * c) / v.scale];
 }
 
+/** Compass bearing (degrees, 0 = north, 90 = east) of a world offset (dx east, dz south). */
+export function bearingDeg(dx: number, dz: number): number {
+  return ((Math.atan2(dx, -dz) * 180) / Math.PI + 360) % 360;
+}
+
+/** "450 m", "6.3 km". */
+export function formatDistance(m: number): string {
+  return m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m / 10) * 10} m`;
+}
+
+/** "6.3 km · 045°": distance and bearing from (x0, z0) to (x1, z1). */
+export function rangeAndBearing(x0: number, z0: number, x1: number, z1: number): string {
+  const brg = Math.round(bearingDeg(x1 - x0, z1 - z0)) % 360;
+  return `${formatDistance(Math.hypot(x1 - x0, z1 - z0))} · ${String(brg).padStart(3, '0')}°`;
+}
+
+/** A round scale-bar length (m) close to `want`. */
+export function scaleBarLength(want: number): number {
+  return [200, 500, 1000, 2000, 5000, 10000, 20000].reduce((a, b) => (Math.abs(Math.log(b / want)) < Math.abs(Math.log(a / want)) ? b : a));
+}
+
 /** Canvas rotation (radians, clockwise) of something pointing along a compass heading (radians). */
 export function screenAngle(v: ChartView, heading: number): number {
   return heading - v.up;
