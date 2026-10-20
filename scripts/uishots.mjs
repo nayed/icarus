@@ -30,6 +30,14 @@ for (const [w, h, tag] of [[1920, 1080, 'desktop'], [390, 844, 'phone']]) {
     await sleep(500);
     await shot(page, `ui-${tag}-controls`);
     await page.click('text=Controls');
+    // I opens and closes the same sheet
+    const sheetOpen = () => page.evaluate(() => !document.querySelector('[data-sheet]').classList.contains('hidden'));
+    await page.keyboard.press('KeyI');
+    await sleep(300);
+    const iOpen = await sheetOpen();
+    await page.keyboard.press('KeyI');
+    await sleep(300);
+    check(iOpen && !(await sheetOpen()), 'I opens and closes the controls sheet in the menu');
     await page.click('.card[data-mode="rings"]');
     await page.click('[data-time="night"]');
     await sleep(2500);
@@ -69,6 +77,40 @@ for (const [w, h, tag] of [[1920, 1080, 'desktop'], [390, 844, 'phone']]) {
     await page.keyboard.press('Escape');
     await sleep(400);
     check((await page.evaluate(() => window.__icarus.session.state())) === 'flying', 'Esc resumes');
+    // I: pauses on the controls list; I again flies on; P pauses on the map; the tabs switch
+    const panel = () => page.evaluate(() => ({
+      state: window.__icarus.session.state(),
+      keys: !document.querySelector('[data-tab-body="controls"]').hidden,
+      map: !document.querySelector('[data-tab-body="map"]').hidden && window.app.ui.pauseMap.open,
+      rows: document.querySelectorAll('.panel-keys .keys .k').length,
+    }));
+    await page.keyboard.press('KeyI');
+    await sleep(500);
+    let pn = await panel();
+    check(pn.state === 'paused' && pn.keys && !pn.map && pn.rows === 15, `I pauses on the controls (${pn.rows} rows)`);
+    await shot(page, `ui-${tag}-pause-controls`);
+    await page.keyboard.press('KeyI');
+    await sleep(400);
+    check((await panel()).state === 'flying', 'I again flies on');
+    await page.keyboard.press('KeyP');
+    await sleep(400);
+    pn = await panel();
+    check(pn.state === 'paused' && pn.map && !pn.keys, 'P pauses on the map');
+    await page.click('[data-tab="controls"]');
+    await sleep(200);
+    pn = await panel();
+    check(pn.keys && !pn.map, 'the Controls tab shows the keys');
+    await page.click('[data-tab="map"]');
+    await sleep(200);
+    pn = await panel();
+    check(pn.map && !pn.keys, 'the Map tab shows the chart');
+    await page.keyboard.press('KeyI');
+    await sleep(200);
+    pn = await panel();
+    check(pn.state === 'paused' && pn.keys, 'I on the map switches to the controls');
+    await page.keyboard.press('KeyP');
+    await sleep(400);
+    check((await panel()).state === 'flying', 'P resumes');
     // results: a landing flown by the autopilot (fast-forwarded)
     await page.evaluate(() => { window.__icarus.setTime(18.0); window.__icarus.session.start('landing'); window.__icarus.setFixedDt(1 / 12); window.__icarus.session.autoLanding(false); });
     await page.waitForFunction(() => window.__icarus.session.state() === 'results', null, { timeout: 240000 });

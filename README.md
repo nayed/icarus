@@ -79,6 +79,7 @@ and its instrument panel, even the engine sound. There are no models, textures o
 | Landing light | L |
 | Map / HUD / fullscreen | M / H / K |
 | Pause | Esc or P (in fullscreen, Esc leaves fullscreen and pauses the flight; P resumes) |
+| Controls list | I (pauses on it; I again to fly on) |
 | Restart | Backspace |
 
 Keys are read by their position, so the same physical keys work on any keyboard layout (the table uses

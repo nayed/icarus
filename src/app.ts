@@ -25,10 +25,15 @@ import type { ModeResult } from './game/grading.ts';
 import { Hud } from './ui/hud.ts';
 import { prefs, savePrefs } from './ui/prefs.ts';
 
+/** What the pause screen's left panel shows. */
+export type PauseTab = 'map' | 'controls';
+
 /** What the app needs from the DOM user interface. */
 export interface UiHooks {
   showMenu(): void;
-  showPause(): void;
+  showPause(tab?: PauseTab): void;
+  /** I outside a flight: show the controls (pause screen, menu), or close them */
+  toggleControls(): void;
   showResults(r: ModeResult): void;
   hideAll(): void;
   toast(html: string): void;
@@ -187,11 +192,11 @@ export class App {
     this.ui?.showMenu();
   }
 
-  pause(): void {
+  pause(tab: PauseTab = 'map'): void {
     if (this.state !== 'flying') return;
     this.state = 'paused';
     this.audio.setMuted(true);
-    this.ui?.showPause();
+    this.ui?.showPause(tab);
   }
 
   resume(): void {
@@ -331,6 +336,12 @@ export class App {
       if (this.state === 'flying') this.pause();
       // a browser that also delivers the Esc that left fullscreen must not undo that pause at once
       else if (this.state === 'paused' && performance.now() - this.fullscreenPauseAt > 150) this.resume();
+      return;
+    }
+    if (a === 'help') {
+      // the controls list: from a flight it pauses on it; the UI handles it on the pause screen and the menu
+      if (this.state === 'flying') this.pause('controls');
+      else this.ui?.toggleControls();
       return;
     }
     if (a === 'restart' && (this.state === 'flying' || this.state === 'paused')) {

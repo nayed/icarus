@@ -234,7 +234,7 @@ for (const [w, h] of [[1600, 900], [1280, 720], [860, 900]]) {
   await page.waitForFunction(() => window.__icarus.map.ready() && document.getElementById('boot').classList.contains('gone'), null, { timeout: 120000 });
   await flyAndPause(page);
   check((await ev(() => window.__icarus.session.state())) === 'paused', `${w}×${h}: paused`);
-  const panel = await page.locator('.map-panel').boundingBox();
+  const panel = await page.locator('.pause-panel').boundingBox();
   const modal = await page.locator('[data-screen="pause"] .modal').boundingBox();
   const inView = (b) => b.x >= 0 && b.x + b.width <= w + 0.5;
   if (w > 900) {
@@ -246,6 +246,18 @@ for (const [w, h] of [[1600, 900], [1280, 720], [860, 900]]) {
       return l.scrollHeight > l.clientHeight;
     });
     check(inView(panel) && inView(modal) && modal.y + modal.height <= panel.y && scrolls, `${w}×${h}: chart below the settings, the screen scrolls to it`);
+    // I brings the controls (below the settings here) into view
+    await page.keyboard.press('KeyP');
+    await page.waitForTimeout(300);
+    await page.keyboard.press('KeyI');
+    await page.waitForTimeout(500);
+    const p2 = await page.locator('.pause-panel').boundingBox();
+    check(p2.y >= 0 && p2.y + p2.height <= h + 0.5, `${w}×${h}: I scrolls the controls into view`);
+    await page.keyboard.press('KeyP');
+    await page.waitForTimeout(300);
+    await page.keyboard.press('KeyP');
+    await page.waitForTimeout(500);
+    check((await page.evaluate(() => document.querySelector('[data-screen="pause"] .pause-layout').scrollTop)) === 0, `${w}×${h}: P opens at the top again`);
   }
   await shot(page, `maps-pause-${w}x${h}`);
   if (w !== 1600) {

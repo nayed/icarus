@@ -54,6 +54,7 @@ not part of this repository.
 | Map | M (heading-up moving map; hidden in the cinematic camera; the choice is remembered) |
 | HUD / fullscreen | H / K |
 | Pause | Esc or P (in fullscreen, Esc leaves fullscreen and pauses the flight; P resumes). The pause screen has the chart: scroll or + / − to zoom, drag to move, double-click or ◎ for the aircraft |
+| Controls | I: pauses on the list of keys (the pause screen's Controls tab); I again flies on. In the menu it opens the controls sheet |
 | Restart | Backspace |
 
 Menu: Enter flies; Esc on the results card goes back to the menu.
@@ -111,6 +112,7 @@ Menu: Enter flies; Esc on the results card goes back to the menu.
     the track flown this session (`src/game/track.ts`: a point every 25 m, the last 100 km). Above it,
     the distance and bearing from the aircraft to the point under the cursor, or else to the next gate,
     the landing strip or the nearest strip. Beside the settings on wide screens, below them under 900 px.
+    It shares that panel with the list of keys: Map and Controls tabs; P opens on the map, I on the keys.
 
 ## Verification (this machine: Intel Lunar Lake iGPU, Linux, headless Chromium through ANGLE/EGL)
 - `npm test`: 56 tests pass. Coverage: for each flight model, takeoff, runway rest (< 1 mm drift),
@@ -131,7 +133,8 @@ Menu: Enter flies; Esc on the results card goes back to the menu.
   - autopilot mountain landing (B, 75)
   - landing flown into the ground (F, gear collapsed)
   - a crash into the sea ends free flight
-- UI flow (menu → Enter → pause → slider → resume → results → menu) at 1920×1080 and 390×844. The menu
+- UI flow (menu → Enter → pause → slider → resume → results → menu, and I for the controls in the menu
+  and in flight) at 1920×1080 and 390×844. The menu
   fits from 1366×768 up; on shorter screens the settings scroll and Fly stays in view.
 - Fallbacks render with no console errors: `nowebgl2`, `nofloat`, `logdepth`, `nofloat,logdepth`.
 - Map: sea and land in the image match the CPU terrain at 99.95% of 6,359 samples (the rest are

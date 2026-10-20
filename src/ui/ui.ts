@@ -1,5 +1,5 @@
 // DOM user interface: main menu, controls sheet, pause/settings overlay, results card, toasts.
-import type { App, StartPoint } from '../app.ts';
+import type { App, PauseTab, StartPoint } from '../app.ts';
 import type { FlightModel } from '../sim/aircraft.ts';
 import type { QualityName } from '../render/quality.ts';
 import { TIME_PRESETS, type TimePreset } from '../world/celestial.ts';
@@ -42,6 +42,7 @@ const KEY_ROWS: [string, Action[]][] = [
   ['Map · HUD', ['map', 'hud']],
   ['Fullscreen', ['fullscreen']],
   ['Pause', ['pause']],
+  ['Controls', ['help']],
   ['Restart', ['restart']],
 ];
 
@@ -66,6 +67,8 @@ export class UI {
   private readonly toasts: HTMLElement;
   private readonly caption: HTMLElement;
   private readonly pauseMap: PauseMap;
+  /** what the pause screen's left panel shows */
+  private pauseTab: PauseTab = 'map';
 
   constructor(private readonly root: HTMLElement, private readonly app: App) {
     this.prefs = prefs;
@@ -101,9 +104,15 @@ export class UI {
       <section class="screen hidden" data-screen="pause">
         <div class="scrim"></div>
         <div class="pause-layout">
-        <div class="map-panel glass" data-pause-map>
-          <div class="map-head"><span class="label">Map</span><span class="map-readout" data-map-readout aria-live="polite"></span></div>
-          <div class="map-frame">
+        <div class="pause-panel glass" data-pause-panel>
+          <div class="panel-head">
+            <div class="seg panel-tabs" role="tablist" aria-label="Map and controls">
+              <button type="button" role="tab" data-tab="map">Map</button>
+              <button type="button" role="tab" data-tab="controls">Controls <span class="kbd">${keyLabel('KeyI')}</span></button>
+            </div>
+            <span class="map-readout" data-map-readout aria-live="polite"></span>
+          </div>
+          <div class="map-frame" data-tab-body="map">
             <canvas aria-label="Map of the fjord, north up, with the aircraft"></canvas>
             <div class="map-tools">
               <button type="button" data-map="in" aria-label="Zoom in" title="Zoom in">+</button>
@@ -111,7 +120,13 @@ export class UI {
               <button type="button" data-map="centre" aria-label="Back to the aircraft" title="Back to the aircraft">◎</button>
             </div>
           </div>
-          <div class="map-foot">Scroll to zoom · drag to move · double-click for the aircraft</div>
+          <div class="panel-keys" data-tab-body="controls" hidden>
+            <div class="inner">
+              <div class="keys" data-keys></div>
+              <div class="note">Drag with the mouse to look around. The aircraft is an amphibian: gear down for the strips, gear up for the water.</div>
+            </div>
+          </div>
+          <div class="panel-foot" data-panel-foot></div>
         </div>
         <div class="modal glass" role="dialog" aria-label="Paused">
           <h2>Paused</h2>
@@ -148,7 +163,7 @@ export class UI {
     this.results = q('[data-screen="results"]');
     this.toasts = q('[data-toasts]');
     this.caption = q('.caption');
-    this.pauseMap = new PauseMap(q('[data-pause-map]'), app);
+    this.pauseMap = new PauseMap(q('[data-pause-panel]'), app);
     if (matchMedia('(pointer: coarse)').matches) (q('[data-touch]') as HTMLElement).hidden = false;
     this.renderMenu();
     this.renderKeys();
@@ -195,12 +210,13 @@ export class UI {
     this.seg('pquality', [['low', 'Low'], ['medium', 'Med'], ['high', 'High']], p.quality);
   }
 
+  /** The key list, in the menu's controls sheet and on the pause screen. */
   private renderKeys(): void {
-    const el = this.root.querySelector('[data-keys]') as HTMLElement;
-    el.innerHTML = KEY_ROWS.map(([label, acts]) => {
+    const html = KEY_ROWS.map(([label, acts]) => {
       const keys = acts.map((a) => actionLabel(a).split(' / ').map((k) => `<span class="kbd">${k}</span>`).join(''));
       return `<span class="k">${keys.join('<span style="opacity:.4;padding:0 2px">·</span>')}</span><span>${label}</span>`;
     }).join('');
+    for (const el of this.root.querySelectorAll<HTMLElement>('[data-keys]')) el.innerHTML = html;
   }
 
   /** Re-render key labels once the keyboard layout is known. */
@@ -258,7 +274,7 @@ export class UI {
     this.syncSliders();
   }
 
-  showPause(): void {
+  showPause(tab: PauseTab = 'map'): void {
     this.hideAll();
     const s = this.app.session;
     const title = this.app.sessionKind === 'rings' ? 'Ring run' : this.app.sessionKind === 'landing' ? 'Mountain landing' : 'Free flight';
@@ -267,7 +283,43 @@ export class UI {
     this.syncSliders();
     this.renderMenu();
     this.pause.classList.remove('hidden');
-    this.pauseMap.show();
+    this.pauseMap.reset();
+    // stacked on narrow screens, the panel is below the settings: start at the top, but bring the
+    // controls into view when they were asked for
+    (this.root.querySelector('.pause-layout') as HTMLElement).scrollTop = 0;
+    this.setPauseTab(tab);
+    if (tab === 'controls') this.revealPanel();
+  }
+
+  private revealPanel(): void {
+    (this.root.querySelector('[data-pause-panel]') as HTMLElement).scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+
+  /** The pause screen's left panel: the chart or the controls. */
+  private setPauseTab(tab: PauseTab): void {
+    this.pauseTab = tab;
+    for (const b of this.root.querySelectorAll<HTMLElement>('[data-tab]')) {
+      b.classList.toggle('on', b.dataset.tab === tab);
+      b.setAttribute('aria-selected', String(b.dataset.tab === tab));
+    }
+    for (const el of this.root.querySelectorAll<HTMLElement>('[data-tab-body]')) el.hidden = el.dataset.tabBody !== tab;
+    (this.root.querySelector('[data-map-readout]') as HTMLElement).hidden = tab !== 'map';
+    (this.root.querySelector('[data-panel-foot]') as HTMLElement).textContent =
+      tab === 'map' ? 'Scroll to zoom · drag to move · double-click for the aircraft' : `Keys follow your keyboard layout · ${keyLabel('KeyI')} again to fly on`;
+    if (tab === 'map') this.pauseMap.show();
+    else this.pauseMap.hide();
+  }
+
+  /** I outside a flight: on the pause screen it shows the controls, or flies on if they already show; in the menu it opens or closes the sheet. */
+  toggleControls(): void {
+    if (this.isMenuOpen()) this.controlsSheet.classList.toggle('hidden');
+    else if (!this.pause.classList.contains('hidden')) {
+      if (this.pauseTab === 'controls') this.app.resume();
+      else {
+        this.setPauseTab('controls');
+        this.revealPanel();
+      }
+    }
   }
 
   // ---------------------------------------------------------------- results
@@ -340,6 +392,11 @@ export class UI {
     const t = e.target as HTMLElement;
     const btn = t.closest('button') as HTMLButtonElement | null;
     if (!btn) return;
+    if (btn.dataset.tab) {
+      this.app.audio.click();
+      this.setPauseTab(btn.dataset.tab as PauseTab);
+      return;
+    }
     for (const g of ['mode', 'start', 'time', 'model', 'quality', 'pmodel', 'pquality']) {
       const v = btn.dataset[g];
       if (v !== undefined) {

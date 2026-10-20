@@ -82,13 +82,17 @@ export class PauseMap {
     });
   }
 
-  /** Opens on the aircraft at the starting zoom. */
-  show(): void {
-    this.open = true;
+  /** Back to the opening view: on the aircraft, 18 km across (each time the pause screen opens). */
+  reset(): void {
     this.span = SPAN_OPEN;
     this.hover = null;
     this.drag = null;
     this.centre();
+  }
+
+  show(): void {
+    this.open = true;
+    this.draw();
   }
 
   hide(): void {
