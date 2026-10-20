@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { Aircraft, type FlightModel, type PilotInput, type Touchdown } from './aircraft.ts';
 import { WorldEnv } from './environment.ts';
 import { Autopilot, idleInput } from './autopilot.ts';
-import { STRIPS, headingDir } from '../world/params.ts';
+import { STRIPS, headingDir, type StripDef } from '../world/params.ts';
 import { drawnHeight } from '../world/clipmap.ts';
 
 export const SIM_DT = 1 / 120;
@@ -36,21 +36,39 @@ export function run(r: Rig, seconds: number, each?: () => void, stopOnCrash = tr
   }
 }
 
-export function runwayEnd(i: number, back: number): { x: number; z: number; heading: number } {
+/** `back` metres in from the end of strip i, facing `heading` (its own heading, or the reverse). */
+export function runwayEnd(i: number, back: number, heading = STRIPS[i].heading): { x: number; z: number; heading: number } {
   const s = STRIPS[i];
   const d = headingDir(s.heading);
-  return { x: s.center[0] - d[0] * (s.halfLength - back), z: s.center[1] - d[1] * (s.halfLength - back), heading: s.heading };
+  // along the strip's heading: start at its near end; the other way: at its far end
+  const e = Math.cos(((heading - s.heading) * Math.PI) / 180) >= 0 ? 1 : -1;
+  return { x: s.center[0] - e * d[0] * (s.halfLength - back), z: s.center[1] - e * d[1] * (s.halfLength - back), heading };
 }
 
-export function placeOnRunway(r: Rig, i: number, back: number): void {
-  const p = runwayEnd(i, back);
+/** The take-off heading at a strip: among its clear departures, the one most into the wind. */
+export function takeoffHeading(s: StripDef, windFrom: number): number {
+  let best = s.departures[0];
+  let headwind = -2;
+  for (const h of s.departures) {
+    const c = Math.cos(((windFrom - h) * Math.PI) / 180);
+    if (c > headwind + 1e-9) {
+      headwind = c;
+      best = h;
+    }
+  }
+  return best;
+}
+
+export function placeOnRunway(r: Rig, i: number, back: number, heading = STRIPS[i].heading): void {
+  const p = runwayEnd(i, back, heading);
   r.env.follow(p.x, p.z);
   r.ac.reset(p.x, drawnHeight(p.x, p.z, r.env.clip) + 2.47, p.z, p.heading, 0);
 }
 
-export function takeoff(model: FlightModel): { liftoffDistance: number; liftoffKt: number; climbFpm: number; crashed: boolean } {
+/** Full-power take-off from strip i along `heading`, holding 8° of pitch, for `seconds`. */
+export function takeoff(model: FlightModel, i = 0, heading = STRIPS[i].heading, seconds = 45): { liftoffDistance: number; liftoffKt: number; climbFpm: number; agl: number; crashed: boolean } {
   const r = makeRig(model);
-  placeOnRunway(r, 0, 20);
+  placeOnRunway(r, i, 20, heading);
   r.inp.flapNotch = 1;
   run(r, 2);
   const x0 = r.ac.pos.clone();
@@ -58,8 +76,8 @@ export function takeoff(model: FlightModel): { liftoffDistance: number; liftoffK
   let lift = 0;
   let liftKt = 0;
   const tel = () => r.ac.telemetry(r.env);
-  const hdg = STRIPS[0].heading;
-  run(r, 45, () => {
+  const hdg = heading;
+  run(r, seconds, () => {
     const t = tel();
     r.inp.pitch = t.ias > 27 ? clamp((8 - t.pitch) * 0.1 - r.ac.omega.x * 0.5, -0.3, 0.6) : 0;
     r.inp.roll = clamp(-t.bank * 0.05 + r.ac.omega.z * 0.4, -1, 1);
@@ -69,7 +87,7 @@ export function takeoff(model: FlightModel): { liftoffDistance: number; liftoffK
       liftKt = t.ias * 1.944;
     }
   });
-  return { liftoffDistance: lift, liftoffKt: liftKt, climbFpm: r.ac.vel.y * 196.85, crashed: r.ac.crashed };
+  return { liftoffDistance: lift, liftoffKt: liftKt, climbFpm: r.ac.vel.y * 196.85, agl: tel().agl, crashed: r.ac.crashed };
 }
 
 export function restOnRunway(model: FlightModel, seconds = 10): { driftMm: number; rotDeg: number; maxSpeed: number } {

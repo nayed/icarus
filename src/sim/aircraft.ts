@@ -231,6 +231,17 @@ export class Aircraft {
     }
   }
 
+  /**
+   * Puts the gear and flaps where the controls set them, at once: a placed aircraft must not spend its
+   * first seconds still moving them from the last flight (a runway start after a gear-up flight would
+   * drop onto its floats).
+   */
+  configure(gearDown: boolean, flapNotch: number): void {
+    this.gear = gearDown ? 1 : 0;
+    this.flapNotch = THREE.MathUtils.clamp(Math.round(flapNotch), 0, AIRCRAFT.flapNotches.length - 1);
+    this.flaps = AIRCRAFT.flapNotches[this.flapNotch];
+  }
+
   // ---------------------------------------------------------------- simulation
 
   step(dt: number, input: PilotInput, env: SimEnv): void {

@@ -8,7 +8,7 @@ import { installDebugHooks } from './debug/hooks.ts';
 import { TIME_PRESETS, type TimePreset, elevationDeg } from './world/celestial.ts';
 import { Aircraft, type FlightModel, type PilotInput, type Telemetry } from './sim/aircraft.ts';
 import { WorldEnv } from './sim/environment.ts';
-import { SIM_DT, runwayEnd } from './sim/scenarios.ts';
+import { SIM_DT, runwayEnd, takeoffHeading } from './sim/scenarios.ts';
 import { Controls, type Action } from './input/controls.ts';
 import { CameraRig, type CameraMode } from './camera/cameras.ts';
 import { PlaneModel } from './plane/planeMesh.ts';
@@ -101,6 +101,8 @@ export class App {
   session: GameMode | null = null;
   sessionKind: ModeKind = 'free';
   sessionStart: StartPoint = 'runway';
+  /** the strip 'runway' starts use (index into STRIPS): a new free flight picks one at random */
+  startStrip = 0;
   /** called once when a session produces its result */
   onResult: ((r: ModeResult) => void) | null = null;
   /** observers (HUD) */
@@ -179,7 +181,8 @@ export class App {
   boot(ui: UiHooks | null): void {
     this.ui = ui;
     const q = this.urlParams;
-    if (q.has('mode') || q.has('start') || !ui) this.startSession((q.get('mode') as ModeKind) ?? 'free', (q.get('start') as StartPoint) ?? 'runway');
+    const strip = STRIPS.findIndex((s) => s.id === q.get('strip'));
+    if (q.has('mode') || q.has('start') || !ui) this.startSession((q.get('mode') as ModeKind) ?? 'free', (q.get('start') as StartPoint) ?? 'runway', { strip: strip >= 0 ? strip : undefined });
     else this.enterMenu();
     requestAnimationFrame(this.loop);
   }
@@ -236,7 +239,7 @@ export class App {
     const ac = this.ac;
     this.env.follow(0, 0);
     if (start === 'runway') {
-      const p = runwayEnd(0, 25);
+      const p = runwayEnd(this.startStrip, 25, takeoffHeading(STRIPS[this.startStrip], this.settings.windFrom));
       this.env.follow(p.x, p.z);
       ac.reset(p.x, drawnHeight(p.x, p.z, this.env.clip) + 2.42, p.z, p.heading, 0);
       this.controls.reset(0, true, 1);
@@ -258,8 +261,15 @@ export class App {
     this.startFlightAt();
   }
 
-  /** Starts (or restarts) a game mode. */
-  startSession(kind: ModeKind, start: StartPoint = this.sessionStart): void {
+  /**
+   * Starts (or restarts) a game mode. A free flight from a strip picks a strip at random, a different
+   * one each time; a restart (`again`) keeps it, and `strip` chooses it.
+   */
+  startSession(kind: ModeKind, start: StartPoint = this.sessionStart, opts: { strip?: number; again?: boolean } = {}): void {
+    if (kind === 'free' && start === 'runway') {
+      if (opts.strip !== undefined) this.startStrip = opts.strip;
+      else if (!opts.again) this.startStrip = (this.startStrip + 1 + Math.floor(Math.random() * (STRIPS.length - 1))) % STRIPS.length;
+    }
     this.session?.end();
     this.inputOverride = null;
     this.sessionKind = kind;
@@ -283,7 +293,7 @@ export class App {
 
   restartSession(): void {
     if (this.sessionKind === 'attract') return;
-    this.startSession(this.sessionKind, this.sessionStart);
+    this.startSession(this.sessionKind, this.sessionStart, { again: true });
   }
 
   /**
@@ -293,6 +303,8 @@ export class App {
   startFlightAt(): void {
     const ac = this.ac;
     ac.model = this.settings.model;
+    const input = this.inputOverride ?? this.controls.input;
+    ac.configure(input.gearDown, input.flapNotch);
     this.prevPos.copy(ac.pos);
     this.prevQuat.copy(ac.q);
     this.acc = 0;

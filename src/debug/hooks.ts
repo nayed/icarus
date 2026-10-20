@@ -54,13 +54,17 @@ export function installDebugHooks(app: App): void {
     },
     /** Game sessions: 'free' | 'rings' | 'landing'. */
     session: {
-      start(kind: 'free' | 'rings' | 'landing', start: StartPoint = 'runway', model?: FlightModel) {
+      /** `strip` (an id) picks the strip of a free flight from a strip; without it, one at random. */
+      start(kind: 'free' | 'rings' | 'landing', start: StartPoint = 'runway', model?: FlightModel, strip?: StripDef['id']) {
         if (model) {
           app.settings.model = model;
           app.applySettings();
         }
-        app.startSession(kind, start);
+        const i = STRIPS.findIndex((s) => s.id === strip);
+        app.startSession(kind, start, { strip: i >= 0 ? i : undefined });
       },
+      /** The strip a free flight from a strip uses (id). */
+      startStrip: () => STRIPS[app.startStrip].id,
       hud: () => app.session?.hud() ?? null,
       result: () => app.session?.result ?? null,
       state: () => app.state,
@@ -160,10 +164,10 @@ export function installDebugHooks(app: App): void {
         const strip = where === 'water' ? scenarios.WATER_LANE : STRIPS.find((s) => s.id === where)!;
         const c = new scenarios.ApproachController(strip, where === 'water');
         c.place(app.ac, dist);
-        app.startFlightAt();
-        app.state = 'flying';
         const inp = { ...app.controls.input, flapNotch: 2, gearDown: where !== 'water', brake: 0 };
         app.inputOverride = inp;
+        app.startFlightAt();
+        app.state = 'flying';
         app.ac.onTouchdown = (t) => c.onTouchdown(t);
         autolandHook = () => c.update(app.ac, app.env, inp, SIM_DT);
         app.onSimStep.push(autolandHook);

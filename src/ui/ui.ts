@@ -12,7 +12,7 @@ import { prefs, savePrefs, type MenuMode, type Prefs } from './prefs.ts';
 import { PauseMap } from './pauseMap.ts';
 
 const MODE_INFO: Record<MenuMode, { t: string; d: () => string }> = {
-  free: { t: 'Free flight', d: () => 'No clock, no score. Take off from the strip, the water or the air.' },
+  free: { t: 'Free flight', d: () => 'No clock, no score. Take off from a random airstrip, from the water or from the air.' },
   rings: { t: 'Ring run', d: () => `Fourteen gates down the fjord against the clock. Par ${formatTime(coursePar(buildCourse())).replace(/\.00$/, '')}.` },
   landing: { t: 'Mountain landing', d: () => 'A short gravel strip on a shelf 800 m up. Graded on the touchdown.' },
 };
@@ -198,7 +198,7 @@ export class UI {
     cards.innerHTML = (Object.keys(MODE_INFO) as MenuMode[])
       .map((m) => `<button type="button" class="card ${m === p.mode ? 'on' : ''}" data-mode="${m}" aria-pressed="${m === p.mode}"><span class="t">${MODE_INFO[m].t}</span><span class="d">${MODE_INFO[m].d()}</span></button>`)
       .join('');
-    this.seg('start', [['runway', 'Coastal strip'], ['water', 'On the water'], ['air', 'Airborne']], p.start);
+    this.seg('start', [['runway', 'Airstrip'], ['water', 'On the water'], ['air', 'Airborne']], p.start);
     (this.root.querySelector('[data-group="start"]') as HTMLElement).style.display = p.mode === 'free' ? '' : 'none';
     this.seg('time', (Object.keys(TIME_PRESETS) as TimePreset[]).map((t) => [t, TIME_LABEL[t]] as [TimePreset, string]), p.time);
     (this.root.querySelector('[data-hint="time"]') as HTMLElement).textContent = hhmm(TIME_PRESETS[p.time]);

@@ -1,4 +1,5 @@
-// Game modes end to end: ring run (clean and corner-cutting), mountain landing (good and hard), free-flight crash.
+// Game modes end to end: ring run (clean and corner-cutting), mountain landing (good and hard), free-flight crash,
+// free flight from a random airstrip.
 import { startServer, launch, waitFrames, shot, report } from './harness.mjs';
 
 const args = Object.fromEntries(process.argv.slice(2).map((a) => a.replace(/^--/, '').split('=')));
@@ -90,6 +91,61 @@ await page.evaluate(() => window.app.ac.crash('test'));
 await waitFrames(page, 20);
 const menu = await page.evaluate(() => ({ state: window.__icarus.session.state(), crashed: window.app.ac.crashed, on: window.app.ac.engineOn }));
 check(menu.state === 'menu' && !menu.crashed && menu.on, `background flight restarted with its engine, state stays ${menu.state}`);
+
+console.log('\n== free flight from an airstrip: a random strip, lined up for its departure into the wind');
+// the menu's Fly with Free flight and Airstrip chosen
+const startFromMenu = () => page.evaluate(() => {
+  const ui = window.app.ui;
+  Object.assign(ui.prefs, { mode: 'free', start: 'runway' });
+  ui.fly();
+});
+const where = () => page.evaluate(() => {
+  const app = window.app;
+  const id = window.__icarus.session.startStrip();
+  return {
+    id,
+    state: window.__icarus.session.state(),
+    onRunway: app.env.onRunway(app.ac.pos.x, app.ac.pos.z),
+    speed: Math.hypot(app.ac.vel.x, app.ac.vel.z),
+    heading: app.telemetry.heading,
+    prompt: window.__icarus.session.hud()?.prompt ?? '',
+    reason: app.ac.crashReason,
+    dt: app.fixedDt,
+    gear: app.ac.gear,
+    wheels: app.ac.wheelsOnGround,
+  };
+});
+const ids = [];
+const bad = [];
+let lined = 0;
+let named = 0;
+for (let k = 0; k < 12; k++) {
+  await startFromMenu();
+  await waitFrames(page, 3);
+  const w = await where();
+  const want = await page.evaluate((id) => {
+    const app = window.app;
+    // the departure most into the wind, as App.startFlight picks it
+    const s = { coastal: [45, 225], mountain: [60, 240], north: [277], east: [262], south: [131, 311] }[id];
+    const wind = app.settings.windFrom;
+    return s.reduce((a, b) => (Math.cos(((wind - b) * Math.PI) / 180) > Math.cos(((wind - a) * Math.PI) / 180) ? b : a));
+  }, w.id);
+  ids.push(w.id);
+  // gear down and on its wheels from the first frames (the flight before, in the menu, was gear up)
+  if (w.state === 'flying' && w.onRunway && w.speed < 0.5 && w.gear === 1 && w.wheels >= 3 && Math.abs(((w.heading - want + 540) % 360) - 180) < 2) lined++;
+  else bad.push(`${w.id}: ${w.state}${w.reason ? ` (${w.reason})` : ''}, ${w.onRunway ? 'on' : 'off'} the runway, ${w.speed.toFixed(2)} m/s, gear ${w.gear.toFixed(2)}, ${w.wheels} wheels down, heading ${w.heading.toFixed(1)} (want ${want})`);
+  if (w.prompt.length > 0) named++;
+}
+const distinct = new Set(ids).size;
+const repeats = ids.filter((id, k) => k > 0 && id === ids[k - 1]).length;
+check(distinct >= 3 && repeats === 0, `12 flights from the menu: ${distinct} different strips, never the same twice in a row (${ids.join(', ')})`);
+check(lined === 12, `every start on the runway, at rest on its wheels, facing its departure into the wind (${lined}/12)${bad.length ? `: ${bad.join('; ')}` : ''}`);
+const last = await where();
+check(named === 12 && /strip\. Hold R/.test(last.prompt), `the start prompt names the strip: "${last.prompt}"`);
+await page.keyboard.press('Backspace');
+await waitFrames(page, 3);
+const again = await where();
+check(again.id === last.id && again.onRunway, `Restart keeps the strip (${last.id} → ${again.id})`);
 
 const ok = report(problems) && failures === 0;
 console.log(ok ? '\nMODE TESTS OK' : `\nMODE TESTS FAILED (${failures})`);

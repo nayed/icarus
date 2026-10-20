@@ -8,7 +8,7 @@ const TIMES = { dawn: 5.85, day: 12, golden: 16.55, dusk: 18.15, night: 22.6 };
 const prefix = args.prefix ?? 'p';
 const server = await startServer();
 const { browser, page, problems } = await launch({ width: Number(args.w ?? 1280), height: Number(args.h ?? 720) });
-await page.goto(`${server.url}?debug&noui${'hud' in args ? '' : '&nohud'}&q=${args.q ?? 'high'}&start=runway`);
+await page.goto(`${server.url}?debug&noui${'hud' in args ? '' : '&nohud'}&q=${args.q ?? 'high'}&start=runway&strip=coastal`);
 await waitFrames(page, 3, 180000);
 await page.evaluate(() => window.__icarus.setAutoScale(false));
 const plans = [

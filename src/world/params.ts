@@ -135,6 +135,8 @@ export interface StripDef {
   surface: 'paved' | 'gravel';
   /** a cabin with a lit window and fuel drums beside the runway */
   cabin: boolean;
+  /** take-off headings with a clear climb-out (terrain under a 9 % climb from lift-off) */
+  departures: number[];
   center: Vec2;
   /** runway heading in degrees, 0 = north (-z), 90 = east (+x) */
   heading: number;
@@ -150,31 +152,32 @@ export interface StripDef {
 
 export const STRIPS: StripDef[] = [
   {
-    id: 'coastal', name: 'Vika coastal strip', surface: 'paved', cabin: true,
+    id: 'coastal', name: 'Vika coastal strip', surface: 'paved', cabin: true, departures: [45, 225],
     center: [600, 6250], heading: 45, halfLength: 450, halfWidth: 13,
     elevation: 20, padLong: 90, padLat: 70, shoulder: 420,
   },
   {
-    id: 'mountain', name: 'Hestskar mountain strip', surface: 'gravel', cabin: false,
+    id: 'mountain', name: 'Hestskar mountain strip', surface: 'gravel', cabin: false, departures: [60, 240],
     center: [5550, 350], heading: 60, halfLength: 210, halfWidth: 9,
     elevation: 798, padLong: 190, padLat: 45, shoulder: 300,
   },
   // sites found with scripts/stripsearch.ts (flat, dry, a clear approach corridor on at least one side)
   {
-    // a shelf between the northern fjord and its north-east arm, water on most sides
-    id: 'north', name: 'Hjelle fjord strip', surface: 'gravel', cabin: true,
+    // a shelf between the northern fjord and its north-east arm, water on most sides; the ground rises
+    // east of it: take off west, over the fjord
+    id: 'north', name: 'Hjelle fjord strip', surface: 'gravel', cabin: true, departures: [277],
     center: [16720, -17350], heading: 97, halfLength: 300, halfWidth: 10,
     elevation: 449, padLong: 120, padLat: 50, shoulder: 350,
   },
   {
     // the valley floor at the head of the main fjord: one way, in from the fjord (082) and out over it
-    id: 'east', name: 'Botn valley strip', surface: 'gravel', cabin: true,
+    id: 'east', name: 'Botn valley strip', surface: 'gravel', cabin: true, departures: [262],
     center: [24360, -2300], heading: 82, halfLength: 280, halfWidth: 9,
     elevation: 80, padLong: 120, padLat: 50, shoulder: 350,
   },
   {
     // flat lowland among the southern lakes
-    id: 'south', name: 'Vatne lake strip', surface: 'paved', cabin: true,
+    id: 'south', name: 'Vatne lake strip', surface: 'paved', cabin: true, departures: [131, 311],
     center: [1750, 17290], heading: 131, halfLength: 340, halfWidth: 12,
     elevation: 95, padLong: 100, padLat: 60, shoulder: 380,
   },

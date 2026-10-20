@@ -34,7 +34,8 @@ not part of this repository.
   The heavier browser checks need a real GPU and stay local.
   - `npm run perf`: GPU time (timer queries), main-thread time and frame interval per preset and view
 - URL flags: `?q=low|medium|high`, `?t=dawn|day|golden|dusk|night|<hours>`, `?mode=free|rings|landing`
-  with `&start=runway|water|air` (skips the menu), `?model=arcade|assisted|simulation`, `?noui`, `?nohud`,
+  with `&start=runway|water|air` (skips the menu; `&strip=coastal|mountain|north|east|south` picks the
+  strip, else it is random), `?model=arcade|assisted|simulation`, `?noui`, `?nohud`,
   `?debug` (test API on `window.__icarus`), `?cam=x,y,z,yaw,pitch`, `?force=nowebgl2|nofloat|logdepth|noatlas`.
 - Preferences (mode, start, time, model, quality, sliders, map on/off) persist in `localStorage`.
 
@@ -60,7 +61,9 @@ not part of this repository.
 Menu: Enter flies; Esc on the results card goes back to the menu.
 
 ## Modes and flight models
-- Free flight: start on the coastal strip, on the water in the fjord, or in the air.
+- Free flight: start on an airstrip, on the water in the fjord, or in the air. The airstrip is picked at
+  random, never the same twice in a row (Restart keeps it), and the aircraft lines up at the end of the
+  runway for the clear departure most into the wind, gear down and flaps at 15°.
 - Ring run: 14 gates down the fjord against the clock (par 4:26); a missed gate costs 5 s. Graded on time.
 - Mountain landing: from a 4 km final to the shelf strip at ~800 m. Graded on sink rate, centreline,
   touchdown point, wings level and stopping on the strip. A crash or overrun is an F.
@@ -75,17 +78,19 @@ Menu: Enter flies; Esc on the results card goes back to the menu.
   eases out once the stick is released (Assisted's auto-trim would otherwise hold it).
 
 ## Airstrips
-| | where | elevation | runway | |
-|---|---|---|---|---|
-| Vika | the coast, south of the main fjord's mouth | 20 m | 900 m, paved | start point, cabin |
-| Hestskar | a shelf north of the main fjord | 798 m | 420 m, gravel | the mountain landing |
-| Hjelle | a shelf between the northern fjord and its north-east arm | 449 m | 600 m, gravel | cabin |
-| Botn | the valley floor at the head of the main fjord | 80 m | 560 m, gravel | one way: land 082 from the fjord, take off back over it (a mountain wall beyond); cabin |
-| Vatne | lowland among the southern lakes | 95 m | 680 m, paved | cabin |
+| | where | elevation | runway | take-offs | |
+|---|---|---|---|---|---|
+| Vika | the coast, south of the main fjord's mouth | 20 m | 900 m, paved | 045, 225 | cabin |
+| Hestskar | a shelf north of the main fjord | 798 m | 420 m, gravel | 060, 240 | the mountain landing |
+| Hjelle | a shelf between the northern fjord and its north-east arm | 449 m | 600 m, gravel | 277 (the ground rises east) | cabin |
+| Botn | the valley floor at the head of the main fjord | 80 m | 560 m, gravel | 262 | one way: land 082 from the fjord, take off back over it (a mountain wall beyond); cabin |
+| Vatne | lowland among the southern lakes | 95 m | 680 m, paved | 131, 311 | cabin |
 
 Sites come from `node scripts/stripsearch.ts <region>`: flat over the whole pad, dry, and a clear
 approach on at least one side (the autoland's: 3.5° to an aim point 120 m in, a corridor ±150 m wide,
-30 m of margin, out to 4 km). No trees grow on a strip, within 35 m of it or 250 m past its ends.
+30 m of margin, out to 4 km). Take-off directions are the ones whose climb-out clears the ground at a
+9 % climb from lift-off (the aircraft manages about 14 %); every one is flown in the unit tests. No trees
+grow on a strip, within 35 m of it or 250 m past its ends.
 
 ## How the terrain stays identical on CPU and GPU
 - `src/world/noise.ts` and `terrain.ts` hold the TS function and its GLSL mirror side by side. The lattice
@@ -133,8 +138,9 @@ approach on at least one side (the autoland's: 3.5° to an aim point 120 m in, a
     It shares that panel with the list of keys: Map and Controls tabs; P opens on the map, I on the keys.
 
 ## Verification (this machine: Intel Lunar Lake iGPU, Linux, headless Chromium through ANGLE/EGL)
-- `npm test`: 65 tests pass. Coverage: for each flight model, takeoff, runway rest (< 1 mm drift),
-  landings on all five strips and on the water, water takeoff, drop tests (never below the drawn surface beyond
+- `npm test`: 90 tests pass. Coverage: for each flight model, takeoff, runway rest (< 1 mm drift),
+  landings on all five strips and on the water, take-offs in every listed direction from every strip,
+  water takeoff, drop tests (never below the drawn surface beyond
   tyre compression), stall and recovery, gear-down water crash, speed limits, restarts; plus grading,
   forest tiling, scaler behaviour, the map's view transform, readouts and track, and what the first map
   covers.
@@ -151,6 +157,8 @@ approach on at least one side (the autoland's: 3.5° to an aim point 120 m in, a
   - autopilot mountain landing (B, 75)
   - landing flown into the ground (F, gear collapsed)
   - a crash into the sea ends free flight
+  - free flight from an airstrip: 12 starts from the menu cover all five strips, never the same twice
+    in a row; each lines up on its wheels for its departure into the wind; Restart keeps the strip
 - UI flow (menu → Enter → pause → slider → resume → results → menu, and I for the controls in the menu
   and in flight) at 1920×1080 and 390×844. The menu
   fits from 1366×768 up; on shorter screens the settings scroll and Fly stays in view.

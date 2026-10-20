@@ -83,7 +83,14 @@ export class FreeFlight extends GameMode {
   begin(): void {
     this.app.startFlight(this.start);
     this.app.ac.onTouchdown = (t) => this.touchdown(t);
-    this.say(this.start === 'water' ? 'Gear is up for the water. R to add power.' : this.start === 'runway' ? 'Hold R for power, S to lift off around 60 kt.' : 'Free flight. C changes the camera.', 'info', 6);
+    const strip = STRIPS[this.app.startStrip];
+    this.say(
+      this.start === 'water' ? 'Gear is up for the water. R to add power.'
+        : this.start === 'runway' ? `${strip.name}. Hold R for power, S to lift off around 60 kt.`
+          : 'Free flight. C changes the camera.',
+      'info',
+      6,
+    );
   }
   private touchdown(t: Touchdown): void {
     const fpm = Math.round(t.sinkRate * 196.85);
@@ -446,8 +453,8 @@ export class AttractFlight extends GameMode {
     const b = this.route[1];
     const hdg = (Math.atan2(b.x - a.x, -(b.z - a.z)) * 180) / Math.PI;
     this.app.ac.reset(a.x, a.y + 230, a.z, hdg, 46);
-    this.app.startFlightAt();
     this.app.inputOverride = this.inp;
+    this.app.startFlightAt();
   }
 
   override simStep(): void {

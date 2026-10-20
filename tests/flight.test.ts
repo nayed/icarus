@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { takeoff, restOnRunway, stall, approach, waterTakeoff, drop, WATER_LANE } from '../src/sim/scenarios.ts';
+import { takeoff, takeoffHeading, restOnRunway, stall, approach, waterTakeoff, drop, WATER_LANE } from '../src/sim/scenarios.ts';
 import { STRIPS } from '../src/world/params.ts';
 import { Aircraft, type FlightModel, type PilotInput } from '../src/sim/aircraft.ts';
 import { WorldEnv } from '../src/sim/environment.ts';
@@ -51,6 +51,16 @@ describe.each(MODELS)('flight model: %s', (model) => {
     // the tests' wind blows from 040°: across some of these runways, so the autoland drifts a little
     expect(Math.abs(r.centreline)).toBeLessThan(s.halfWidth - 2);
     expect(r.stoppedOnRunway).toBe(true);
+  });
+
+  it.each(STRIPS.flatMap((s, i) => s.departures.map((h) => [s.id, h, i] as const)))('takes off from the %s strip on %i° and climbs clear', (_id, h, i) => {
+    const r = takeoff(model, i, h, 60);
+    expect(r.crashed).toBe(false);
+    // off the ground with runway to spare (the start is 20 m in from the end)
+    expect(r.liftoffDistance).toBeGreaterThan(50);
+    expect(r.liftoffDistance).toBeLessThan(2 * STRIPS[i].halfLength - 70);
+    // a minute later, well clear of the ground (Vatne's 311 climbs over rising ground: ~150 m)
+    expect(r.agl).toBeGreaterThan(100);
   });
 
   it('takes off from and lands on the fjord with the gear up', () => {
@@ -182,5 +192,14 @@ describe('restarts', () => {
     }
     expect(ac.engineOn).toBe(true);
     expect(ac.rpm).toBeGreaterThan(1900);
+  });
+});
+
+describe('take-off direction', () => {
+  it('is the clear departure most into the wind', () => {
+    const at = (wind: number) => STRIPS.map((s) => takeoffHeading(s, wind));
+    // strips in order: Vika, Hestskar, Hjelle, Botn, Vatne
+    expect(at(40)).toEqual([45, 60, 277, 262, 311]);
+    expect(at(220)).toEqual([225, 240, 277, 262, 131]);
   });
 });

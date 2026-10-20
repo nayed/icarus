@@ -29,7 +29,7 @@ for (const q of (args.q ?? 'high,medium,low').split(',')) {
       const api = window.__icarus;
       if (v.cam) api.setCamera(...v.cam);
       else {
-        api.session.start('free', v.start);
+        api.session.start('free', v.start, undefined, 'coastal');
         api.flight.input({ throttle: v.start === 'air' ? 0.65 : 0.05, pitch: 0, roll: 0, yaw: 0, brake: 0 });
         api.setCameraMode(v.mode);
       }
