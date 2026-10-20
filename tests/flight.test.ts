@@ -42,6 +42,17 @@ describe.each(MODELS)('flight model: %s', (model) => {
     expect(r.stoppedOnRunway).toBe(true);
   });
 
+  it.each(['north', 'east', 'south'])('lands on the %s strip', (id) => {
+    const s = STRIPS.find((st) => st.id === id)!;
+    const r = approach(model, s);
+    expect(r.crashed, r.crashReason).toBe(false);
+    expect(r.touchdown?.onRunway).toBe(true);
+    expect(r.pastThreshold).toBeGreaterThan(0);
+    // the tests' wind blows from 040°: across some of these runways, so the autoland drifts a little
+    expect(Math.abs(r.centreline)).toBeLessThan(s.halfWidth - 2);
+    expect(r.stoppedOnRunway).toBe(true);
+  });
+
   it('takes off from and lands on the fjord with the gear up', () => {
     const t = waterTakeoff(model);
     expect(t.crashed).toBe(false);

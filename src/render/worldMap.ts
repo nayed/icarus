@@ -7,6 +7,7 @@ import { FullscreenPass, passMaterial } from './fullscreen.ts';
 import { worldGlsl } from '../world/params.ts';
 import { NOISE_GLSL } from '../world/noise.ts';
 import { terrainGlsl } from '../world/terrain.ts';
+import { stripClearingGlsl } from '../world/forest.ts';
 
 /** texels per side */
 export const MAP_SIZE = 2048;
@@ -56,6 +57,7 @@ void main() {
 const COLOUR_FRAG = () => /* glsl */ `
 ${worldGlsl()}
 ${NOISE_GLSL}
+${stripClearingGlsl()}
 uniform sampler2D uHeights;
 uniform vec3 uMap;
 out vec4 fragColor;
@@ -86,7 +88,7 @@ void main() {
   float snow = smoothstep(snowLine - 40.0, snowLine + 60.0, h) * (1.0 - smoothstep(0.34, 0.52, slope));
   float treeLine = 430.0 + 110.0 * nL;
   float forest = (1.0 - smoothstep(treeLine - 80.0, treeLine + 30.0, h)) * (1.0 - smoothstep(0.2, 0.36, slope))
-    * smoothstep(3.0, 10.0, h) * smoothstep(-0.55, 0.05, nM);
+    * smoothstep(3.0, 10.0, h) * smoothstep(-0.55, 0.05, nM) * stripClearing(P);
   float rock = smoothstep(0.17, 0.33, slope);
   vec3 col = mix(HEATH, FOREST, forest);
   col = mix(col, ROCK, rock);

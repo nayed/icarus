@@ -6,7 +6,7 @@ import { drawnHeight, vertexHeight, octavesForSpacing } from '../world/clipmap.t
 import { terrainVertexShader, terrainPrefix } from '../render/terrainMesh.ts';
 import { globals } from '../render/globals.ts';
 import { FullscreenPass, passMaterial } from '../render/fullscreen.ts';
-import { TERRAIN_OCTAVES, STRIPS } from '../world/params.ts';
+import { TERRAIN_OCTAVES, STRIPS, type StripDef } from '../world/params.ts';
 import type { StartPoint, FlightSettings } from '../app.ts';
 import type { CameraMode } from '../camera/cameras.ts';
 import type { FlightModel, PilotInput } from '../sim/aircraft.ts';
@@ -146,8 +146,8 @@ export function installDebugHooks(app: App): void {
         if (name === 'landWater') return scenarios.approach(model, scenarios.WATER_LANE, 2000, true);
         return S[name](model);
       },
-      /** Live autoland onto 'coastal' | 'mountain' | 'water' (renders while flying); null cancels. */
-      autoland(where: 'coastal' | 'mountain' | 'water' | null, dist = 2500) {
+      /** Live autoland onto a strip (by id: 'coastal', 'mountain', 'north'…) or 'water' (renders while flying); null cancels. */
+      autoland(where: StripDef['id'] | 'water' | null, dist = 2500) {
         if (autolandHook) {
           const i = app.onSimStep.indexOf(autolandHook);
           if (i >= 0) app.onSimStep.splice(i, 1);
@@ -157,7 +157,7 @@ export function installDebugHooks(app: App): void {
           app.inputOverride = null;
           return null;
         }
-        const strip = where === 'water' ? scenarios.WATER_LANE : STRIPS[where === 'coastal' ? 0 : 1];
+        const strip = where === 'water' ? scenarios.WATER_LANE : STRIPS.find((s) => s.id === where)!;
         const c = new scenarios.ApproachController(strip, where === 'water');
         c.place(app.ac, dist);
         app.startFlightAt();

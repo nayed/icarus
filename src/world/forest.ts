@@ -1,7 +1,8 @@
 // Forest placement on the CPU. Mirrors the forest/birch masks of the terrain shader
 // (same noise, same thresholds) so instanced trees stand where the ground is painted as forest.
-import { terrainHeight } from './terrain.ts';
+import { terrainHeight, boxSdf } from './terrain.ts';
 import { vnoise, smoothstep, hashU } from './noise.ts';
+import { STRIPS, STRIP_CLEARING, headingDir } from './params.ts';
 
 export interface TreeTile {
   key: string;
@@ -14,6 +15,37 @@ export interface TreeTile {
 
 const TREE_OCT = 7;
 
+const STRIP_DIRS = STRIPS.map((s) => headingDir(s.heading));
+
+/** 0 on and around the airstrips (no trees there), 1 elsewhere. Mirrored by stripClearingGlsl(). */
+export function stripClearing(x: number, z: number): number {
+  let c = 1;
+  STRIPS.forEach((s, i) => {
+    const d = STRIP_DIRS[i];
+    const sd = boxSdf(x, z, s.center[0], s.center[1], d[0], d[1], s.halfLength + STRIP_CLEARING.ends, s.halfWidth + STRIP_CLEARING.sides);
+    c = Math.min(c, smoothstep(0, STRIP_CLEARING.fade, sd));
+  });
+  return c;
+}
+
+/** GLSL stripClearing(p), expecting worldGlsl() before it (the STRIPn_A and STRIPn_CLEAR constants). */
+export function stripClearingGlsl(): string {
+  const each = STRIPS.map((_, i) => `  c = min(c, smoothstep(0.0, ${STRIP_CLEARING.fade.toFixed(1)}, clearingSdf(p, STRIP${i}_A, STRIP${i}_CLEAR)));`).join('\n');
+  return /* glsl */ `
+float clearingSdf(vec2 p, vec4 A, vec2 he) {
+  vec2 r = p - A.xy;
+  vec2 l = abs(vec2(r.x * A.z + r.y * A.w, -r.x * A.w + r.y * A.z)) - he;
+  vec2 o = max(l, 0.0);
+  return sqrt(o.x * o.x + o.y * o.y) + min(max(l.x, l.y), 0.0);
+}
+float stripClearing(vec2 p) {
+  float c = 1.0;
+${each}
+  return c;
+}
+`;
+}
+
 /** Forest density and birch fraction at a point (h = terrain height). */
 export function forestAt(x: number, z: number, h: number, slope: number): { forest: number; birch: number } {
   const nL = vnoise(x / 520, z / 520, 501);
@@ -24,7 +56,8 @@ export function forestAt(x: number, z: number, h: number, slope: number): { fore
     (1 - smoothstep(treeLine - 80, treeLine + 30, h)) *
     (1 - smoothstep(0.2, 0.36, slope)) *
     smoothstep(3, 10, h) *
-    smoothstep(-0.55, 0.05, nM + 0.45 * nS);
+    smoothstep(-0.55, 0.05, nM + 0.45 * nS) *
+    stripClearing(x, z);
   const birch = smoothstep(-0.5, 0.4, nL + 0.7 * nM);
   return { forest, birch };
 }

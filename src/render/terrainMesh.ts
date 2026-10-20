@@ -12,6 +12,7 @@ import { OUTPUT_GLSL } from './post.ts';
 import { CLOUD_COMMON_GLSL } from './clouds.ts';
 import { FullscreenPass, passMaterial } from './fullscreen.ts';
 import { levelOrigin, levelSpacing } from '../world/clipmap.ts';
+import { stripClearingGlsl } from '../world/forest.ts';
 
 export function terrainPrefix(): string {
   return worldGlsl() + NOISE_GLSL + terrainGlsl() + CLIPMAP_GLSL;
@@ -106,7 +107,7 @@ void main() {
 `;
 
 function stripGlsl(): string {
-  return STRIPS.map((s, i) => `  paintRunway(col, rough, P.xz, STRIP${i}_A, STRIP${i}_RW, ${s.id === 'coastal' ? '1.0' : '0.0'}, foot);`).join('\n');
+  return STRIPS.map((s, i) => `  paintRunway(col, rough, P.xz, STRIP${i}_A, STRIP${i}_RW, ${s.surface === 'paved' ? '1.0' : '0.0'}, foot);`).join('\n');
 }
 
 const FRAG = /* glsl */ `
@@ -179,7 +180,8 @@ void main() {
   float forest = (1.0 - smoothstep(treeLine - 80.0, treeLine + 30.0, y))
     * (1.0 - smoothstep(0.2, 0.36, slope))
     * smoothstep(3.0, 10.0, y)
-    * smoothstep(-0.55, 0.05, nM + 0.45 * nS);
+    * smoothstep(-0.55, 0.05, nM + 0.45 * nS)
+    * stripClearing(P.xz);
   float rock = smoothstep(0.17, 0.33, slope + 0.07 * nS + 0.03 * nT);
   float scree = smoothstep(0.1, 0.2, slope) * (1.0 - rock) * smoothstep(250.0, 600.0, y);
   float beach = (1.0 - smoothstep(1.5, 4.5, y + 2.0 * nS)) * (1.0 - smoothstep(0.2, 0.45, slope));
@@ -288,7 +290,7 @@ export class TerrainMesh {
       glslVersion: THREE.GLSL3,
       vertexShader: terrainVertexShader(),
       fragmentShader:
-        ATMOSPHERE_GLSL + SKYVIEW_SAMPLE_GLSL + GLOBALS_GLSL + terrainPrefix() + CLOUD_COMMON_GLSL + OUTPUT_GLSL + FRAG.replace('STRIP_PAINT', stripGlsl()),
+        ATMOSPHERE_GLSL + SKYVIEW_SAMPLE_GLSL + GLOBALS_GLSL + terrainPrefix() + stripClearingGlsl() + CLOUD_COMMON_GLSL + OUTPUT_GLSL + FRAG.replace('STRIP_PAINT', stripGlsl()),
       uniforms: { ...globals, ...this.uniforms },
       defines: { ...this.defines, ...(ldr ? { LDR_OUTPUT: '' } : {}) },
     });

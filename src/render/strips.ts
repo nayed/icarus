@@ -60,7 +60,7 @@ export class Strips {
       const n = [-d[1], d[0]];
       const at = (along: number, across: number): [number, number] => [s.center[0] + d[0] * along + n[0] * across, s.center[1] + d[1] * along + n[1] * across];
       const W = s.halfWidth + 2;
-      const step = s.id === 'coastal' ? 60 : 50;
+      const step = s.surface === 'paved' ? 60 : 50;
       for (let a = -s.halfLength; a <= s.halfLength + 0.1; a += step) {
         for (const side of [-1, 1]) add(...at(a, side * W), [1.0, 0.85, 0.55]);
       }
@@ -72,7 +72,7 @@ export class Strips {
         }
       }
       // day markers: orange/white cones along the gravel strip edges
-      if (s.id === 'mountain') {
+      if (s.surface === 'gravel') {
         for (let a = -s.halfLength; a <= s.halfLength + 0.1; a += 70) {
           for (const side of [-1, 1]) {
             const [x, z] = at(a, side * (s.halfWidth + 3));
@@ -97,8 +97,8 @@ export class Strips {
       sock.add(sockMesh);
       this.socks.push(sock);
       this.group.add(sock);
-      // a cabin with a warm window by the coastal strip
-      if (s.id === 'coastal') {
+      // a cabin with a warm window beside the runway
+      if (s.cabin) {
         const [cx, cz] = at(-s.halfLength + 140, s.halfWidth + 45);
         const cy = terrainHeight(cx, cz);
         const yaw = Math.atan2(d[0], d[1]);

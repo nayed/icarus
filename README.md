@@ -21,14 +21,18 @@ and its instrument panel, even the engine sound. There are no models, textures o
 
 ## The world
 
-- **Fjords and mountains** shaped from noise, with snow above a treeline and forests in the valleys. The
-  same terrain function runs on the CPU and the GPU, so the ground you land on is exactly the ground
+- **Fjords and mountains**: a main fjord with two arms, northern and southern fjord systems reaching
+  35 km inland, a sound that breaks the coast into islands, lakes in the valleys and an archipelago
+  offshore, among mountains shaped from noise, with snow above a treeline and forests in the valleys.
+  The same terrain function runs on the CPU and the GPU, so the ground you land on is exactly the ground
   that is drawn.
 - **Terrain to the horizon**, with a level-of-detail mesh that keeps the frame rate up.
 - **A sea** with animated waves, reflections and colour that follows the water's depth.
 - **A sky that follows the clock** at 69.6° N: sun and moon, stars and the Milky Way, volumetric clouds,
   fog, a long twilight, and the aurora at night.
-- **Two airstrips**: a coastal strip near sea level and a short gravel strip on a mountain shelf 800 m up.
+- **Five airstrips**: Vika on the coast, Hestskar on a mountain shelf 800 m up, Hjelle on a shelf between
+  the northern fjords, Botn at the head of the main fjord (one way: in from the fjord, out over it) and
+  Vatne among the southern lakes.
 
 ![The same fjord at dawn, day, golden hour, dusk and night](docs/screenshots/times-of-day.jpg)
 

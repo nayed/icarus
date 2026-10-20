@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { toScreen, toWorld, screenAngle, bearingDeg, formatDistance, rangeAndBearing, scaleBarLength, type ChartView } from '../src/ui/chart.ts';
 import { Track } from '../src/game/track.ts';
 import { MAP_EXTENT, MAP_HOME, MAP_TEXEL, mapCovers, mapRegionAround } from '../src/render/worldMap.ts';
-import { FJORDS, STRIPS, headingDir } from '../src/world/params.ts';
+import { FJORDS, RELIEF_FJORDS, STRIPS, headingDir } from '../src/world/params.ts';
 import { buildCourse } from '../src/game/course.ts';
 
 const DEG = Math.PI / 180;
@@ -64,10 +64,12 @@ describe('map region', () => {
     expect(mapCovers(r.x0, r.z0, 0, -MAP_EXTENT)).toBe(false);
   });
 
-  it('the first map covers the whole fjord, both strips, the course and every start point', () => {
+  it('the first map covers the main fjord, every strip, the course and every start point, and shows every fjord', () => {
     const home = mapRegionAround(MAP_HOME[0], MAP_HOME[1]);
+    // the other fjords reach towards the edges: they only have to be on the map
+    for (const f of FJORDS.slice(RELIEF_FJORDS)) for (const [x, z] of f.points) expect(mapCovers(home.x0, home.z0, x, z, 0), `(${x}, ${z})`).toBe(true);
     const pts: [number, number][] = [];
-    for (const f of FJORDS) pts.push(...(f.points as [number, number][]));
+    for (const f of FJORDS.slice(0, RELIEF_FJORDS)) pts.push(...(f.points as [number, number][]));
     for (const s of STRIPS) pts.push(s.center as [number, number]);
     const gates = buildCourse();
     for (const g of gates) pts.push([g.x, g.z]);

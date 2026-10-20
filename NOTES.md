@@ -74,6 +74,19 @@ Menu: Enter flies; Esc on the results card goes back to the menu.
   136 kt the nose comes up by itself and forward stick loses authority, and a dive steeper than 12°
   eases out once the stick is released (Assisted's auto-trim would otherwise hold it).
 
+## Airstrips
+| | where | elevation | runway | |
+|---|---|---|---|---|
+| Vika | the coast, south of the main fjord's mouth | 20 m | 900 m, paved | start point, cabin |
+| Hestskar | a shelf north of the main fjord | 798 m | 420 m, gravel | the mountain landing |
+| Hjelle | a shelf between the northern fjord and its north-east arm | 449 m | 600 m, gravel | cabin |
+| Botn | the valley floor at the head of the main fjord | 80 m | 560 m, gravel | one way: land 082 from the fjord, take off back over it (a mountain wall beyond); cabin |
+| Vatne | lowland among the southern lakes | 95 m | 680 m, paved | cabin |
+
+Sites come from `node scripts/stripsearch.ts <region>`: flat over the whole pad, dry, and a clear
+approach on at least one side (the autoland's: 3.5° to an aim point 120 m in, a corridor ±150 m wide,
+30 m of margin, out to 4 km). No trees grow on a strip, within 35 m of it or 250 m past its ends.
+
 ## How the terrain stays identical on CPU and GPU
 - `src/world/noise.ts` and `terrain.ts` hold the TS function and its GLSL mirror side by side. The lattice
   hash is 32-bit integer math (bit-exact on both sides); constants come from `params.ts`.
@@ -81,8 +94,13 @@ Menu: Enter flies; Esc on the results card goes back to the menu.
   morph toward the coarser level near a level's edge. `drawnHeight()` reproduces the vertex shader and the
   triangle split, so collision and landing grading use the rendered surface. Lattice heights are baked into
   a float atlas when a level moves (the vertex shader only fetches); on the CPU they are memoised.
-- Measured parity (Intel iGPU, fp32 vs fp64): function ≤ 3.5 mm worldwide; rasterised surface vs CPU
-  ≤ 0.22 mm near the camera, ≤ 3 mm out to ±30 km.
+- The fjords are polylines in `params.ts`. The first three (the main system) are measured everywhere:
+  the mountains rise along them. The others only change the terrain inside their `FJORD_BOX`, whose
+  reach is conservative (widest wandering bottom, coves, gentlest wall, the smooth minimum), so skipping
+  them outside it changes no height. In GLSL one `fjordDist(f, p)` walks the fjords' shared constant
+  arrays: the shader's size does not grow with their number.
+- Measured parity (Intel iGPU, fp32 vs fp64): function ≤ 5.4 mm worldwide; rasterised surface vs CPU
+  ≤ 0.22 mm near the camera, ≤ 4.5 mm out to ±30 km.
 
 ## Rendering
 - HDR half-float target (MSAA), Hillaire atmosphere LUTs, volumetric clouds at ½ or ¼ resolution with
@@ -115,8 +133,8 @@ Menu: Enter flies; Esc on the results card goes back to the menu.
     It shares that panel with the list of keys: Map and Controls tabs; P opens on the map, I on the keys.
 
 ## Verification (this machine: Intel Lunar Lake iGPU, Linux, headless Chromium through ANGLE/EGL)
-- `npm test`: 56 tests pass. Coverage: for each flight model, takeoff, runway rest (< 1 mm drift),
-  coastal, mountain and water landings, water takeoff, drop tests (never below the drawn surface beyond
+- `npm test`: 65 tests pass. Coverage: for each flight model, takeoff, runway rest (< 1 mm drift),
+  landings on all five strips and on the water, water takeoff, drop tests (never below the drawn surface beyond
   tyre compression), stall and recovery, gear-down water crash, speed limits, restarts; plus grading,
   forest tiling, scaler behaviour, the map's view transform, readouts and track, and what the first map
   covers.
@@ -146,18 +164,22 @@ Menu: Enter flies; Esc on the results card goes back to the menu.
   settings at 1600×900 and 1280×720 and below them at 860×900.
 - Console: no errors, shader or GL errors, page errors or failed requests in any of the runs above.
 - Frame cost at 1920×1080 (GPU time by timer query, steady 16.7 ms frame interval in every view),
-  remeasured with the moving map on 2026-10-20:
+  measured with the fjords and the five strips on 2026-10-20:
 
   | preset | GPU ms (7 views) | main thread ms |
   |---|---|---|
-  | high | 9.2 – 16.4 | ≤ 5.6 |
-  | medium | 6.3 – 10.0 | ≤ 3.9 |
-  | low (renders at 0.75×) | 3.0 – 9.5 | ≤ 3.7 |
+  | high | 9.1 – 16.4 | ≤ 6.0 |
+  | medium | 6.2 – 9.6 | ≤ 4.7 |
+  | low (renders at 0.75×) | 3.0 – 6.3 | ≤ 2.8 |
 
-  This laptop iGPU varies a lot from run to run with its clocks and temperature: an earlier session,
-  before the map, measured 8.8 – 16.2 / 5.6 – 10.5 / 2.7 – 5.7 ms on the GPU and ≤ 4.4 / 3.2 / 3.1 ms on
-  the main thread. Measured directly, in the same view with the map on and off, drawing the map costs
-  the main thread 0.1 – 0.2 ms.
+  The same session before them: 9.6 – 16.5 / 6.6 – 11.0 / 3.2 – 10.4 ms on the GPU, ≤ 6.2 / 4.1 / 3.8 ms
+  on the main thread. This laptop iGPU varies a lot from run to run with its clocks and temperature
+  (±1 ms on the main thread, more on the GPU), so read these as "no regression", not as a gain.
+  Drawing the HUD map costs the main thread 0.1 – 0.2 ms (measured with it on and off).
+- The terrain function: 1.78 µs per point on the CPU at 7 octaves (1.51 µs with the three fjords alone;
+  evaluating every fjord everywhere would make it 4.5 µs), and the same on the GPU (1.9 vs 2.0 ms per
+  131,000 points). The LDR fallback evaluates it per vertex and per water pixel, every frame, and with
+  more water in view its GPU-synced frames went from about 38 to about 52 ms (medium, three views).
 
 ## Not verified
 - Other GPUs (discrete NVIDIA/AMD, Apple, mobile), other browsers (Firefox, Safari) and Windows/macOS
@@ -174,5 +196,7 @@ Menu: Enter flies; Esc on the results card goes back to the menu.
   are resolved by moving the aircraft up without adding energy.
 - On the LDR fallback the clouds are a flat layer and the terrain has no self-shadowing.
 - Trees stream in nearest-first after a start (the nearest 500 m appear at once).
+- There is one water level: the lakes are at sea level, like the fjords (which suits valleys near the
+  coast; there are no mountain lakes).
 - The map has 24 m texels and simplified biome colours (no detail finer than a texel). It is ready
   within about a second on a GPU; with software rendering (SwiftShader) it takes 20–90 s.

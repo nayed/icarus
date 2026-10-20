@@ -39,6 +39,11 @@ live in NOTES.md; keep them current when behaviour changes.
   need the CPU side too (parity's raster check catches drift).
 - `src/world` and `src/sim` must stay plain enough for Node's type stripping (`node scripts/map.ts`,
   `node scripts/sim/fly.ts`): no parameter properties, enums or namespaces, and no DOM.
+- Fjords are polylines in `FJORDS` (`src/world/params.ts`). Fjords past the first `RELIEF_FJORDS` are
+  skipped outside `FJORD_BOX`, whose reach mirrors `carveFjord()`'s widths, coves and walls: change them
+  together, or the skip stops being exact (parity catches it only where it samples).
+- Airstrips are `STRIPS` in `params.ts`: find a site with `node scripts/stripsearch.ts`, add an autoland
+  test (`tests/flight.test.ts`), and append (the mountain landing uses index 1).
 - Imports use explicit `.ts` extensions.
 - Custom ShaderMaterials output pre-exposed HDR through `finalOutput()`. Vertex shaders use
   `#include <icarus_logdepth_vertex>` (registered in `src/render/worldRenderer.ts`), not three's
