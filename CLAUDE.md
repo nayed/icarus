@@ -44,9 +44,11 @@ live in NOTES.md; keep them current when behaviour changes.
   together, or the skip stops being exact (parity catches it only where it samples).
 - Airstrips are `STRIPS` in `params.ts`: find a site with `node scripts/stripsearch.ts`, add an autoland
   test (`tests/flight.test.ts`), and append (the mountain landing uses index 1).
-- Free flights on the water start at a random spot (`src/world/waterStart.ts`), checked on the CPU
-  terrain. The checks assume a lift-off within 700 m and seas no rougher than `MAX_SEA`: retune them
-  with the flight model or the waves (`tests/waterStart.test.ts` flies take-offs from random spots).
+- Free flights on the water and in the air start at random spots (`src/world/waterStart.ts`,
+  `src/world/airStart.ts`), checked on the CPU terrain. The water checks assume a lift-off within 700 m
+  and seas no rougher than `MAX_SEA`: retune them with the flight model or the waves (the tests fly
+  from random spots). Scripts that need a repeatable start pin it: `session.start(kind, start, model,
+  'home')`, or `&strip=`, `&water=`, `&air=` in the URL.
 - Imports use explicit `.ts` extensions.
 - Custom ShaderMaterials output pre-exposed HDR through `finalOutput()`. Vertex shaders use
   `#include <icarus_logdepth_vertex>` (registered in `src/render/worldRenderer.ts`), not three's

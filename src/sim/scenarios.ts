@@ -7,6 +7,7 @@ import { Autopilot, idleInput } from './autopilot.ts';
 import { STRIPS, headingDir, type StripDef } from '../world/params.ts';
 import { drawnHeight } from '../world/clipmap.ts';
 import { WATER_HOME } from '../world/waterStart.ts';
+import { AIR_SPEED } from '../world/airStart.ts';
 
 export const SIM_DT = 1 / 120;
 const clamp = THREE.MathUtils.clamp;
@@ -279,6 +280,32 @@ export function waterTakeoff(model: FlightModel, start: { x: number; z: number; 
     }
   });
   return { distance: dist, liftoffKt: kt, agl: r.ac.telemetry(r.env).agl, crashed: r.ac.crashed, crashReason: r.ac.crashReason };
+}
+
+/** Puts the aircraft in steady flight at `start`: `airspeed` m/s through the air, drifting with the wind there. */
+export function placeInAir(ac: Aircraft, env: WorldEnv, start: { x: number; y: number; z: number; heading: number }, airspeed: number): void {
+  env.follow(start.x, start.z);
+  ac.reset(start.x, start.y, start.z, start.heading, airspeed);
+  ac.vel.add(env.wind(start.x, start.y, start.z, 0, new THREE.Vector3()));
+}
+
+/**
+ * From an airborne start (AIR_SPEED, 62 % power, gear down, flaps up, as the app places it), the
+ * autopilot holds the start's heading and height for `seconds`.
+ */
+export function cruise(model: FlightModel, start: { x: number; y: number; z: number; heading: number }, wind = { from: 40, speed: 4 }, seconds = 60): { crashed: boolean; crashReason: string; minAgl: number } {
+  const r = makeRig(model);
+  r.env.setWind(wind.from, wind.speed);
+  placeInAir(r.ac, r.env, start, AIR_SPEED);
+  r.ac.configure(true, 0);
+  Object.assign(r.inp, { throttle: 0.62, gearDown: true, flapNotch: 0 });
+  let minAgl = Infinity;
+  run(r, seconds, () => {
+    const t = r.ac.telemetry(r.env);
+    minAgl = Math.min(minAgl, t.agl);
+    r.ap.update(r.ac, { heading: start.heading, altitude: start.y, speed: AIR_SPEED }, t.ias, SIM_DT, r.inp);
+  });
+  return { crashed: r.ac.crashed, crashReason: r.ac.crashReason, minAgl };
 }
 
 export interface DropResult {

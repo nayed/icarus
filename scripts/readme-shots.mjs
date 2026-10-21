@@ -24,7 +24,7 @@ const fly = (t, start, cam, hud, advance) =>
   ev(([t, start, cam, hud, advance]) => {
     const api = window.__icarus;
     api.setTime(t);
-    api.session.start('free', start, undefined, start === 'water' ? { x: 2600, z: 2350, heading: 95 } : undefined);
+    api.session.start('free', start, undefined, 'home');
     api.flight.input({ throttle: start === 'air' ? 0.65 : 0, pitch: 0, roll: 0, yaw: 0 });
     api.setCameraMode(cam);
     const rig = window.app.rig;

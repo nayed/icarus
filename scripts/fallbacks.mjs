@@ -19,7 +19,7 @@ for (const force of ['nowebgl2', 'nofloat', 'logdepth', 'nofloat,logdepth']) {
     await page.waitForFunction(() => document.getElementById('boot').classList.contains('gone'), null, { timeout: 60000 });
     const info = await page.evaluate(() => window.__icarus.info());
     console.log(`  ${force}: hdr ${info.hdr}, reversedZ ${info.reversedZ}, logDepth ${info.logDepth}, ${info.calls} draw calls`);
-    await page.evaluate(() => { window.__icarus.setAutoScale(false); window.__icarus.session.start('free', 'air'); window.__icarus.setCameraMode('chase'); });
+    await page.evaluate(() => { window.__icarus.setAutoScale(false); window.__icarus.session.start('free', 'air', undefined, 'home'); window.__icarus.setCameraMode('chase'); });
     await waitFrames(page, 60);
     const st = await page.evaluate(() => window.__icarus.flight.state());
     check(!st.crashed, `${force}: flying (alt ${st.altitude.toFixed(0)} m)`);

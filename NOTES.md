@@ -35,7 +35,8 @@ not part of this repository.
   - `npm run perf`: GPU time (timer queries), main-thread time and frame interval per preset and view
 - URL flags: `?q=low|medium|high`, `?t=dawn|day|golden|dusk|night|<hours>`, `?mode=free|rings|landing`
   with `&start=runway|water|air` (skips the menu; `&strip=coastal|mountain|north|east|south` picks the
-  strip and `&water=x,z,heading` the spot on the water, else they are random),
+  strip, `&water=x,z,heading` the spot on the water and `&air=x,y,z,heading` the one in the air, else
+  they are random),
   `?model=arcade|assisted|simulation`, `?noui`, `?nohud`, `?debug` (test API on `window.__icarus`),
   `?cam=x,y,z,yaw,pitch`, `?force=nowebgl2|nofloat|logdepth|noatlas`.
 - Preferences (mode, start, time, model, quality, sliders, map on/off) persist in `localStorage`.
@@ -75,6 +76,15 @@ Menu: Enter flies; Esc on the results card goes back to the menu.
   coast's waves are rougher than the fjords', and scripted take-offs there start failing from about
   8 m/s of wind, so in a strong wind the start stays in the sheltered fjords. Restart keeps the spot.
   Picking one takes about 2.5 ms (at most about 30).
+- The spot in the air is random too (`src/world/airStart.ts`): 87 kt through the air (moving with the
+  wind, so a tailwind never starts it slow), 62 % power, gear down and flaps up. A spot anywhere over
+  the map, at least 6 km from the last one; of the headings every 15°, one of those whose way over the
+  ground for 4 km (±300 m, drifting with the wind) is lowest, so most starts fly down a valley or a
+  fjord (three in five are below the ridges around them), and facing the land rather than the open sea;
+  a height 150–350 m above the highest ground on that way and within 400 m around, checked every 50 m
+  along and 75 m across. Starts stay below 1300 m, under the clouds (base 1550 m): a spot among the
+  highest mountains is dropped and another drawn. About a third start over the water. Restart keeps the
+  spot. Picking one takes about 8 ms (at most about 40).
 - Ring run: 14 gates down the fjord against the clock (par 4:26); a missed gate costs 5 s. Graded on time.
 - Mountain landing: from a 4 km final to the shelf strip at ~800 m. Graded on sink rate, centreline,
   touchdown point, wings level and stopping on the strip. A crash or overrun is an F.
@@ -149,16 +159,19 @@ grow on a strip, within 35 m of it or 250 m past its ends.
     It shares that panel with the list of keys: Map and Controls tabs; P opens on the map, I on the keys.
 
 ## Verification (this machine: Intel Lunar Lake iGPU, Linux, headless Chromium through ANGLE/EGL)
-- `npm test`: 97 tests pass. Coverage: for each flight model, takeoff, runway rest (< 1 mm drift),
+- `npm test`: 102 tests pass. Coverage: for each flight model, takeoff, runway rest (< 1 mm drift),
   landings on all five strips and on the water, take-offs in every listed direction from every strip,
-  water takeoff, take-offs from random spots on the water in random winds up to 15 m/s, drop tests (never
-  below the drawn surface beyond tyre compression), stall and recovery, gear-down water crash, speed
-  limits, restarts; plus 150 random water starts (deep, sheltered, a clear take-off into the wind, a
-  different water each time) and their spread, grading, forest tiling, scaler behaviour, the map's view
-  transform, readouts and track, and what the first map covers.
-- Keyboard flight tests (real key events), all three models:
+  water takeoff, take-offs from random spots on the water and a minute's flight on from random spots in
+  the air, both in random winds up to 15 m/s, drop tests (never below the drawn surface beyond tyre
+  compression), stall and recovery, gear-down water crash, speed limits, restarts; plus 150 random water
+  starts (deep, sheltered, a clear take-off into the wind, a different water each time) and their
+  spread, 60 random air starts (150 m clear of the ground on the way ahead, drifting with the wind, and
+  around, checked at full detail and twice as densely as the picker samples; below the clouds; 6 km
+  apart), grading, forest tiling, scaler behaviour, the map's view transform, readouts and track, and
+  what the first map covers.
+- Keyboard flight tests (real key events, from the coastal strip), all three models:
   - runway rest ≤ 0.16 mm drift in 10 s
-  - keyboard takeoff (liftoff after 245–280 m at ~70 kt)
+  - keyboard takeoff (liftoff after 240–280 m at ~70 kt)
   - Simulation stall with the warning before the break, 15–22 m lost, then recovery;
     Arcade/Assisted protected
   - autoland, then rest after rollout
@@ -174,6 +187,8 @@ grow on a strip, within 35 m of it or 250 m past its ends.
   - free flight on the water: 8 starts from the menu at 8 different spots, never the same water twice in
     a row; each afloat at its spot, gear up, at rest, facing within 70° of the wind; Restart keeps the
     spot
+  - free flight in the air: 8 starts from the menu, each at least 6 km from the one before, flying from
+    its spot on its heading at least 140 m above the ground; Restart keeps the spot
 - UI flow (menu → Enter → pause → slider → resume → results → menu, and I for the controls in the menu
   and in flight) at 1920×1080 and 390×844. The menu
   fits from 1366×768 up; on shorter screens the settings scroll and Fly stays in view.

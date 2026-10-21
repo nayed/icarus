@@ -127,6 +127,12 @@ export const FJORD_SEGMENT_BOX = FJORDS.flatMap((fj, i) => {
 /** Index of each fjord's first segment box. */
 export const FJORD_FIRST_SEGMENT = FJORDS.map((_, i) => FJORDS.slice(0, i).reduce((n, fj) => n + fj.points.length - 1, 0));
 
+/**
+ * Free flight's random starts (on the water, in the air) lie in this box (x0, z0, x1, z1): on the
+ * first map (src/render/worldMap.ts), 4 km in from its edges.
+ */
+export const START_BOX = [-11500, -21000, 29500, 20000] as const;
+
 /** A strip is a flat oriented rectangle blended into the terrain. */
 export interface StripDef {
   id: 'coastal' | 'mountain' | 'north' | 'east' | 'south';

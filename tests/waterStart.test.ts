@@ -1,19 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { COAST, MAX_SEA, WATER_HOME, WATER_START_BOX, clearTakeoff, pickWaterStart, waterAt } from '../src/world/waterStart.ts';
+import { COAST, MAX_SEA, WATER_HOME, clearTakeoff, pickWaterStart, waterAt } from '../src/world/waterStart.ts';
+import { START_BOX } from '../src/world/params.ts';
 import { terrainHeight } from '../src/world/terrain.ts';
 import { fetchFactor, seaState } from '../src/world/water.ts';
 import { waterTakeoff } from '../src/sim/scenarios.ts';
 import type { FlightModel } from '../src/sim/aircraft.ts';
-
-/** A repeatable random sequence (mulberry32). */
-function seeded(seed: number): () => number {
-  return () => {
-    seed = (seed + 0x6d2b79f5) >>> 0;
-    let t = Math.imul(seed ^ (seed >>> 15), seed | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+import { seeded } from './random.ts';
 const offWind = (heading: number, windFrom: number) => Math.abs(((((heading - windFrom) % 360) + 540) % 360) - 180);
 
 describe('water starts', () => {
@@ -31,7 +23,7 @@ describe('water starts', () => {
       expect(seaState(speed) * fetchFactor(s.x), at).toBeLessThanOrEqual(MAX_SEA);
       expect(clearTakeoff(s.x, s.z, s.heading), at).toBe(true);
       expect(offWind(s.heading, from), at).toBeLessThanOrEqual(70);
-      expect(s.x >= WATER_START_BOX[0] && s.z >= WATER_START_BOX[1] && s.x <= WATER_START_BOX[2] && s.z <= WATER_START_BOX[3], at).toBe(true);
+      expect(s.x >= START_BOX[0] && s.z >= START_BOX[1] && s.x <= START_BOX[2] && s.z <= START_BOX[3], at).toBe(true);
       last = s.water;
     }
   });

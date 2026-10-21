@@ -1,5 +1,5 @@
 // Game modes end to end: ring run (clean and corner-cutting), mountain landing (good and hard), free-flight crash,
-// free flight from a random airstrip and from a random spot on the water.
+// free flight from a random airstrip, from a random spot on the water and from one in the air.
 import { startServer, launch, waitFrames, shot, report } from './harness.mjs';
 
 const args = Object.fromEntries(process.argv.slice(2).map((a) => a.replace(/^--/, '').split('=')));
@@ -67,7 +67,7 @@ r = await waitResult(240000);
 check(r && (!r.success || ['C', 'D', 'F'].includes(r.grade)), `hard landing: ${r ? `${r.grade} score ${r.headline} (${r.subtitle}) — ${metrics(r)}` : 'no result'}`);
 
 console.log('\n== free flight, dive into the sea');
-await open('free', '&start=air');
+await open('free', '&start=air&air=-6000,420,2300,80');
 await page.evaluate(() => window.__icarus.flight.input({ pitch: -1, throttle: 1 }));
 r = await waitResult(60000);
 check(r && r.grade === 'F' && !r.success, `crash ends the session: ${r ? `${r.headline} — ${r.subtitle}` : 'no result'}`);
@@ -189,6 +189,48 @@ await waitFrames(page, 3);
 const back = await afloat();
 const was = spots[7].spot;
 check(back.spot.x === was.x && back.spot.z === was.z && Math.hypot(back.x - was.x, back.z - was.z) < 5, `Restart keeps the spot (${Math.round(was.x)}, ${Math.round(was.z)})`);
+
+console.log('\n== free flight in the air: a random spot each time, well clear of the ground');
+const aloft = () => page.evaluate(() => {
+  const app = window.app;
+  return {
+    spot: window.__icarus.session.airStart(),
+    state: window.__icarus.session.state(),
+    x: app.ac.pos.x,
+    y: app.ac.pos.y,
+    z: app.ac.pos.z,
+    agl: app.telemetry.agl,
+    ias: app.telemetry.ias,
+    stall: app.telemetry.stallWarning,
+    heading: app.telemetry.heading,
+    reason: app.ac.crashReason,
+  };
+});
+const flights = [];
+const off = [];
+for (let k = 0; k < 8; k++) {
+  await page.evaluate(() => {
+    const ui = window.app.ui;
+    Object.assign(ui.prefs, { mode: 'free', start: 'air' });
+    ui.fly();
+  });
+  await waitFrames(page, 3);
+  const a = await aloft();
+  flights.push(a);
+  const from = Math.hypot(a.x - a.spot.x, a.z - a.spot.z);
+  // 87 kt through the air, whatever the wind (it reads a little less on the airspeed indicator up high)
+  if (!(a.state === 'flying' && a.agl > 140 && from < 60 && Math.abs(a.y - a.spot.y) < 10 && angle(a.heading, a.spot.heading) < 3 && a.ias > 38 && !a.stall)) {
+    off.push(`(${Math.round(a.spot.x)}, ${Math.round(a.spot.y)}, ${Math.round(a.spot.z)}) on ${a.spot.heading}°: ${a.state}${a.reason ? ` (${a.reason})` : ''}, ${from.toFixed(0)} m from it, ${a.agl.toFixed(0)} m above the ground, heading ${a.heading.toFixed(1)}, ${(a.ias * 1.944).toFixed(0)} kt`);
+  }
+}
+check(off.length === 0, `8 flights from the menu: flying from the spot on its heading at cruise speed, at least 140 m above the ground${off.length ? `: ${off.join('; ')}` : ''}`);
+const gaps = flights.slice(1).map((a, k) => Math.hypot(a.spot.x - flights[k].spot.x, a.spot.z - flights[k].spot.z));
+check(Math.min(...gaps) >= 6000, `each start at least 6 km from the one before (${gaps.map((g) => (g / 1000).toFixed(0)).join(', ')} km), heights ${flights.map((a) => Math.round(a.spot.y)).join(', ')} m`);
+await page.keyboard.press('Backspace');
+await waitFrames(page, 3);
+const again2 = await aloft();
+const prev = flights[7].spot;
+check(again2.spot.x === prev.x && again2.spot.y === prev.y && Math.hypot(again2.x - prev.x, again2.z - prev.z) < 60, `Restart keeps the spot (${Math.round(prev.x)}, ${Math.round(prev.y)}, ${Math.round(prev.z)})`);
 
 const ok = report(problems) && failures === 0;
 console.log(ok ? '\nMODE TESTS OK' : `\nMODE TESTS FAILED (${failures})`);

@@ -61,7 +61,7 @@ async function fly(s, { pitch = null, bank = 0, heading = null, dt = 0.05 }) {
 
 for (const model of models) {
   console.log(`\n== ${model}`);
-  await page.goto(`${server.url}?debug&q=${args.q ?? 'low'}&start=runway&model=${model}&t=golden`);
+  await page.goto(`${server.url}?debug&q=${args.q ?? 'low'}&start=runway&strip=coastal&model=${model}&t=golden`);
   await waitFrames(page, 3, 180000);
   await page.evaluate(() => window.__icarus.setAutoScale(false));
   await page.evaluate(() => window.__icarus.setCameraMode('chase'));

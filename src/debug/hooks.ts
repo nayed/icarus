@@ -14,6 +14,7 @@ import * as scenarios from '../sim/scenarios.ts';
 import { SIM_DT } from '../sim/scenarios.ts';
 import { Autopilot } from '../sim/autopilot.ts';
 import { WATER_HOME, waterAt } from '../world/waterStart.ts';
+import { AIR_HOME } from '../world/airStart.ts';
 
 export interface ParityStats {
   count: number;
@@ -56,22 +57,28 @@ export function installDebugHooks(app: App): void {
     /** Game sessions: 'free' | 'rings' | 'landing'. */
     session: {
       /**
-       * `where` picks the strip of a free flight from a strip (an id), or the spot of one on the water
-       * ({ x, z, heading }); without it, one at random.
+       * `where` picks a free flight's start: a strip (its id), a spot on the water ({ x, z, heading }) or
+       * in the air ({ x, y, z, heading }), or 'home', the classic one (the coastal strip, the main fjord
+       * off it, the sea off its mouth: repeatable screenshots and timings); without it, one at random.
        */
-      start(kind: 'free' | 'rings' | 'landing', start: StartPoint = 'runway', model?: FlightModel, where?: StripDef['id'] | { x: number; z: number; heading: number }) {
+      start(kind: 'free' | 'rings' | 'landing', start: StartPoint = 'runway', model?: FlightModel, where?: StripDef['id'] | 'home' | { x: number; y?: number; z: number; heading: number }) {
         if (model) {
           app.settings.model = model;
           app.applySettings();
         }
-        const i = STRIPS.findIndex((s) => s.id === where);
-        const water = typeof where === 'object' ? { ...where, water: waterAt(where.x, where.z) } : undefined;
-        app.startSession(kind, start, { strip: i >= 0 ? i : undefined, water });
+        const home = where === 'home';
+        const i = home ? 0 : STRIPS.findIndex((s) => s.id === where);
+        const spot = typeof where === 'object' ? where : undefined;
+        const water = start !== 'water' ? undefined : home ? WATER_HOME : spot && { x: spot.x, z: spot.z, heading: spot.heading, water: waterAt(spot.x, spot.z) };
+        const air = start !== 'air' ? undefined : home ? AIR_HOME : spot && { x: spot.x, y: spot.y ?? AIR_HOME.y, z: spot.z, heading: spot.heading };
+        app.startSession(kind, start, { strip: i >= 0 ? i : undefined, water, air });
       },
       /** The strip a free flight from a strip uses (id). */
       startStrip: () => STRIPS[app.startStrip].id,
       /** The spot a free flight on the water uses, and its water (an index into FJORDS, or -1 for the coast). */
       waterStart: () => ({ ...(app.waterStart ?? WATER_HOME) }),
+      /** The spot a free flight in the air starts from. */
+      airStart: () => ({ ...(app.airStart ?? AIR_HOME) }),
       hud: () => app.session?.hud() ?? null,
       result: () => app.session?.result ?? null,
       state: () => app.state,

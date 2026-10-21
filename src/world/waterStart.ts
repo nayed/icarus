@@ -3,7 +3,7 @@
 // for the wind, and has a clear take-off into the wind: a run on open water, then a straight climb-out
 // over whatever comes after. Checked on the CPU terrain, the heights the world is drawn and collided with.
 import { terrainHeight } from './terrain.ts';
-import { FJORDS, FJORD_LENGTH, headingDir, type Vec2 } from './params.ts';
+import { FJORDS, FJORD_LENGTH, START_BOX, headingDir, type Vec2 } from './params.ts';
 import { fetchFactor, seaState } from './water.ts';
 
 export interface WaterStart {
@@ -20,9 +20,6 @@ export const COAST = -1;
 
 /** The classic start in the main fjord, off the coastal strip (tests, repeatable screenshots). */
 export const WATER_HOME: WaterStart = { x: 2600, z: 2350, heading: 95, water: 0 };
-
-/** Starts lie in this box (x0, z0, x1, z1): on the first map (src/render/worldMap.ts), 4 km in from its edges. */
-export const WATER_START_BOX = [-11500, -21000, 29500, 20000] as const;
 
 // The checks (metres). Lift-off on the water takes 70–290 m, the run allows 700 (tests/waterStart.test.ts).
 /** terrain octaves for the checks: cheaper than all 11, and random picks pass with all 11 too */
@@ -112,7 +109,7 @@ function nearLand(x: number, z: number): boolean {
 
 /** A random spot in water w, not checked yet: for a fjord, along its line and within its width. */
 function spotIn(w: number, rand: () => number): Vec2 {
-  const B = WATER_START_BOX;
+  const B = START_BOX;
   if (w === COAST) return [B[0] + rand() * (B[2] - B[0]), B[1] + rand() * (B[3] - B[1])];
   const fj = FJORDS[w];
   const s = rand() * FJORD_LENGTH[w];
@@ -138,7 +135,7 @@ function spotIn(w: number, rand: () => number): Vec2 {
  * coast in a gale) is dropped and another drawn.
  */
 export function pickWaterStart(windFrom: number, windSpeed: number, rand: () => number = Math.random, avoid?: number): WaterStart {
-  const B = WATER_START_BOX;
+  const B = START_BOX;
   const sea = seaState(windSpeed);
   const waters = [COAST, ...FJORDS.map((_, f) => f)].filter((w) => w !== avoid);
   while (waters.length) {

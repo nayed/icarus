@@ -99,7 +99,7 @@ async function headingUpCheck(page) {
   // after a turn the map has turned with it
   await ev(() => {
     const api = window.__icarus;
-    api.session.start('free', 'water', undefined, { x: 2600, z: 2350, heading: 95 });
+    api.session.start('free', 'water', undefined, 'home');
     api.flight.input({ throttle: 0 });
   });
   await waitFrames(page, 30);
@@ -157,7 +157,7 @@ async function headingUpCheck(page) {
   await waitFrames(page, 3, 180000);
   check((await ev(() => window.app.mapVisible)) === false, 'still off after a reload');
   await ev(() => {
-    window.__icarus.session.start('free', 'air');
+    window.__icarus.session.start('free', 'air', undefined, 'home');
     window.app.mapVisible = true;
   });
 
@@ -181,7 +181,7 @@ async function headingUpCheck(page) {
   const { browser, page, problems } = await launch({ width: 390, height: 844 });
   all.push(problems);
   const ev = (f, a) => page.evaluate(f, a);
-  await page.goto(`${server.url}?debug&q=low&mode=free&start=air`);
+  await page.goto(`${server.url}?debug&q=low&mode=free&start=air&air=-6000,420,2300,80`);
   await waitFrames(page, 3, 180000);
   await page.waitForFunction(() => window.__icarus.map.ready(), null, { timeout: 120000 });
   await waitFrames(page, 20);
@@ -216,7 +216,7 @@ async function flyAndPause(page) {
   await page.evaluate(() => {
     const api = window.__icarus;
     api.setTime(15.5);
-    api.session.start('free', 'air');
+    api.session.start('free', 'air', undefined, 'home');
     api.flight.input({ throttle: 0.62, pitch: 0, roll: 0, yaw: 0 });
     api.setFixedDt(1 / 6);
   });
