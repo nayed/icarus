@@ -12,7 +12,7 @@ import { prefs, savePrefs, type MenuMode, type Prefs } from './prefs.ts';
 import { PauseMap } from './pauseMap.ts';
 
 const MODE_INFO: Record<MenuMode, { t: string; d: () => string }> = {
-  free: { t: 'Free flight', d: () => 'No clock, no score. Take off from a random airstrip, from the water or from the air.' },
+  free: { t: 'Free flight', d: () => 'No clock, no score. Start on a random airstrip, a random spot on the water, or in the air.' },
   rings: { t: 'Ring run', d: () => `Fourteen gates down the fjord against the clock. Par ${formatTime(coursePar(buildCourse())).replace(/\.00$/, '')}.` },
   landing: { t: 'Mountain landing', d: () => 'A short gravel strip on a shelf 800 m up. Graded on the touchdown.' },
 };

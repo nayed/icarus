@@ -4,6 +4,7 @@ import { Track } from '../src/game/track.ts';
 import { MAP_EXTENT, MAP_HOME, MAP_TEXEL, mapCovers, mapRegionAround } from '../src/render/worldMap.ts';
 import { FJORDS, RELIEF_FJORDS, STRIPS, headingDir } from '../src/world/params.ts';
 import { buildCourse } from '../src/game/course.ts';
+import { WATER_START_BOX } from '../src/world/waterStart.ts';
 
 const DEG = Math.PI / 180;
 const view = (up: number): ChartView => ({ sx: 100, sy: 100, wx: 5000, wz: -2000, scale: 0.02, up: up * DEG });
@@ -79,6 +80,9 @@ describe('map region', () => {
     const d = headingDir(m.heading);
     pts.push([m.center[0] - d[0] * (m.halfLength + 4200), m.center[1] - d[1] * (m.halfLength + 4200)]);
     for (const [x, z] of pts) expect(mapCovers(home.x0, home.z0, x, z), `(${x}, ${z})`).toBe(true);
+    // random starts on the water: at least the HUD map's range (4 km) inside the first map
+    const B = WATER_START_BOX;
+    for (const [x, z] of [[B[0], B[1]], [B[2], B[3]]]) expect(mapCovers(home.x0, home.z0, x, z, 4000), `(${x}, ${z})`).toBe(true);
   });
 });
 

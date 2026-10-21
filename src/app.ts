@@ -19,6 +19,7 @@ import { globals } from './render/globals.ts';
 import { drawnHeight, makeClipState } from './world/clipmap.ts';
 import { AIRCRAFT } from './sim/config.ts';
 import { STRIPS, SEA_LEVEL } from './world/params.ts';
+import { WATER_HOME, pickWaterStart, waterAt, type WaterStart } from './world/waterStart.ts';
 import { createMode, type GameMode, type ModeKind } from './game/modes.ts';
 import { Track } from './game/track.ts';
 import type { ModeResult } from './game/grading.ts';
@@ -103,6 +104,8 @@ export class App {
   sessionStart: StartPoint = 'runway';
   /** the strip 'runway' starts use (index into STRIPS): a new free flight picks one at random */
   startStrip = 0;
+  /** the spot 'water' starts use (WATER_HOME until one is drawn): a new free flight draws one at random */
+  waterStart: WaterStart | null = null;
   /** called once when a session produces its result */
   onResult: ((r: ModeResult) => void) | null = null;
   /** observers (HUD) */
@@ -182,7 +185,10 @@ export class App {
     this.ui = ui;
     const q = this.urlParams;
     const strip = STRIPS.findIndex((s) => s.id === q.get('strip'));
-    if (q.has('mode') || q.has('start') || !ui) this.startSession((q.get('mode') as ModeKind) ?? 'free', (q.get('start') as StartPoint) ?? 'runway', { strip: strip >= 0 ? strip : undefined });
+    // ?water=x,z,heading pins the spot of a start on the water
+    const [x, z, heading] = (q.get('water') ?? '').split(',').map(Number);
+    const water = [x, z, heading].every(Number.isFinite) ? { x, z, heading, water: waterAt(x, z) } : undefined;
+    if (q.has('mode') || q.has('start') || !ui) this.startSession((q.get('mode') as ModeKind) ?? 'free', (q.get('start') as StartPoint) ?? 'runway', { strip: strip >= 0 ? strip : undefined, water });
     else this.enterMenu();
     requestAnimationFrame(this.loop);
   }
@@ -244,7 +250,9 @@ export class App {
       ac.reset(p.x, drawnHeight(p.x, p.z, this.env.clip) + 2.42, p.z, p.heading, 0);
       this.controls.reset(0, true, 1);
     } else if (start === 'water') {
-      ac.reset(2600, SEA_LEVEL + 1.85, 2350, 95, 0);
+      const w = this.waterStart ?? WATER_HOME;
+      this.env.follow(w.x, w.z);
+      ac.reset(w.x, SEA_LEVEL + 1.85, w.z, w.heading, 0);
       this.controls.reset(0, false, 1);
     } else if (start === 'mountain-approach') {
       const s = STRIPS[1];
@@ -263,12 +271,17 @@ export class App {
 
   /**
    * Starts (or restarts) a game mode. A free flight from a strip picks a strip at random, a different
-   * one each time; a restart (`again`) keeps it, and `strip` chooses it.
+   * one each time, and one on the water a spot in a different water, facing into the wind; a restart
+   * (`again`) keeps the strip or the spot, and `strip` or `water` chooses it.
    */
-  startSession(kind: ModeKind, start: StartPoint = this.sessionStart, opts: { strip?: number; again?: boolean } = {}): void {
+  startSession(kind: ModeKind, start: StartPoint = this.sessionStart, opts: { strip?: number; water?: WaterStart; again?: boolean } = {}): void {
     if (kind === 'free' && start === 'runway') {
       if (opts.strip !== undefined) this.startStrip = opts.strip;
       else if (!opts.again) this.startStrip = (this.startStrip + 1 + Math.floor(Math.random() * (STRIPS.length - 1))) % STRIPS.length;
+    }
+    if (kind === 'free' && start === 'water') {
+      if (opts.water) this.waterStart = opts.water;
+      else if (!opts.again || !this.waterStart) this.waterStart = pickWaterStart(this.settings.windFrom, this.settings.windSpeed, Math.random, this.waterStart?.water);
     }
     this.session?.end();
     this.inputOverride = null;

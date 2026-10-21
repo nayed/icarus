@@ -7,6 +7,11 @@ const G = 9.81;
 const BASE_LAMBDA = [41, 27, 17.5, 11.3, 7.4, 4.9];
 const SPREAD = [0, 0.55, -0.4, 0.9, -0.75, 0.25];
 
+/** How high the sea runs in a wind of `speed` m/s (1 at 8 m/s), before the fetch (fetchFactor) shelters it. */
+export function seaState(speed: number): number {
+  return Math.min(1.6, Math.pow(Math.max(speed, 0.5) / 8, 1.3));
+}
+
 /** Packed per wave: dirX, dirZ, wavelength, amplitude. Plus steepness array. */
 export class WaveSet {
   readonly waves = new Float32Array(WAVE_COUNT * 4);
@@ -17,7 +22,7 @@ export class WaveSet {
   set(dirX: number, dirZ: number, speed: number): void {
     this.windSpeed = speed;
     const base = Math.atan2(dirZ, dirX);
-    const sea = Math.min(1.6, Math.pow(Math.max(speed, 0.5) / 8, 1.3));
+    const sea = seaState(speed);
     for (let i = 0; i < WAVE_COUNT; i++) {
       const a = base + SPREAD[i];
       const lambda = BASE_LAMBDA[i];

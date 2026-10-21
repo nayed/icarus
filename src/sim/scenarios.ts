@@ -6,6 +6,7 @@ import { WorldEnv } from './environment.ts';
 import { Autopilot, idleInput } from './autopilot.ts';
 import { STRIPS, headingDir, type StripDef } from '../world/params.ts';
 import { drawnHeight } from '../world/clipmap.ts';
+import { WATER_HOME } from '../world/waterStart.ts';
 
 export const SIM_DT = 1 / 120;
 const clamp = THREE.MathUtils.clamp;
@@ -251,9 +252,15 @@ export function approach(model: FlightModel, strip: StripLike, dist = 2500, wate
 
 export const WATER_LANE = { center: [3200, 2400] as const, heading: 95, halfLength: 600, elevation: -2.3 };
 
-export function waterTakeoff(model: FlightModel): { distance: number; liftoffKt: number; crashed: boolean } {
+/**
+ * Full-power take-off on the water with the gear up, from `start` along its heading, holding 9° of
+ * pitch once flying, for `seconds`.
+ */
+export function waterTakeoff(model: FlightModel, start: { x: number; z: number; heading: number } = WATER_HOME, wind = { from: 40, speed: 4 }, seconds = 60): { distance: number; liftoffKt: number; agl: number; crashed: boolean; crashReason: string } {
   const r = makeRig(model);
-  r.ac.reset(2600, 2.0, 2350, 95, 0);
+  r.env.setWind(wind.from, wind.speed);
+  r.env.follow(start.x, start.z);
+  r.ac.reset(start.x, 2.0, start.z, start.heading, 0);
   r.inp.gearDown = false;
   r.inp.flapNotch = 1;
   run(r, 6);
@@ -261,17 +268,17 @@ export function waterTakeoff(model: FlightModel): { distance: number; liftoffKt:
   const x0 = r.ac.pos.clone();
   let dist = 0;
   let kt = 0;
-  run(r, 60, () => {
+  run(r, seconds, () => {
     const t = r.ac.telemetry(r.env);
     r.inp.pitch = clamp(((t.ias > 26 ? 9 : 4) - t.pitch) * 0.08 - r.ac.omega.x * 0.6, -1, 1);
     r.inp.roll = clamp(-t.bank * 0.04 + r.ac.omega.z * 0.3, -1, 1);
-    r.inp.yaw = clamp((95 - t.heading) * 0.05 + r.ac.beta, -1, 1);
+    r.inp.yaw = clamp((((start.heading - t.heading + 540) % 360) - 180) * 0.05 + r.ac.beta, -1, 1);
     if (!dist && r.ac.keelInWater === 0 && t.agl > 1) {
       dist = r.ac.pos.distanceTo(x0);
       kt = t.ias * 1.944;
     }
   });
-  return { distance: dist, liftoffKt: kt, crashed: r.ac.crashed };
+  return { distance: dist, liftoffKt: kt, agl: r.ac.telemetry(r.env).agl, crashed: r.ac.crashed, crashReason: r.ac.crashReason };
 }
 
 export interface DropResult {

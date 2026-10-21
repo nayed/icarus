@@ -99,7 +99,7 @@ async function headingUpCheck(page) {
   // after a turn the map has turned with it
   await ev(() => {
     const api = window.__icarus;
-    api.session.start('free', 'water');
+    api.session.start('free', 'water', undefined, { x: 2600, z: 2350, heading: 95 });
     api.flight.input({ throttle: 0 });
   });
   await waitFrames(page, 30);

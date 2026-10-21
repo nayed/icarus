@@ -1,5 +1,5 @@
 // Game modes end to end: ring run (clean and corner-cutting), mountain landing (good and hard), free-flight crash,
-// free flight from a random airstrip.
+// free flight from a random airstrip and from a random spot on the water.
 import { startServer, launch, waitFrames, shot, report } from './harness.mjs';
 
 const args = Object.fromEntries(process.argv.slice(2).map((a) => a.replace(/^--/, '').split('=')));
@@ -146,6 +146,49 @@ await page.keyboard.press('Backspace');
 await waitFrames(page, 3);
 const again = await where();
 check(again.id === last.id && again.onRunway, `Restart keeps the strip (${last.id} → ${again.id})`);
+
+console.log('\n== free flight on the water: a random spot each time, facing into the wind');
+const afloat = () => page.evaluate(() => {
+  const app = window.app;
+  return {
+    spot: window.__icarus.session.waterStart(),
+    state: window.__icarus.session.state(),
+    x: app.ac.pos.x,
+    z: app.ac.pos.z,
+    keel: app.ac.keelInWater,
+    gear: app.ac.gear,
+    speed: Math.hypot(app.ac.vel.x, app.ac.vel.z),
+    heading: app.telemetry.heading,
+    wind: app.settings.windFrom,
+    reason: app.ac.crashReason,
+  };
+});
+const spots = [];
+const adrift = [];
+const angle = (a, b) => Math.abs(((a - b + 540) % 360) - 180);
+for (let k = 0; k < 8; k++) {
+  await page.evaluate(() => {
+    const ui = window.app.ui;
+    Object.assign(ui.prefs, { mode: 'free', start: 'water' });
+    ui.fly();
+  });
+  await waitFrames(page, 3);
+  const w = await afloat();
+  spots.push(w);
+  const at = Math.hypot(w.x - w.spot.x, w.z - w.spot.z);
+  if (!(w.state === 'flying' && w.keel > 0 && w.gear === 0 && w.speed < 1 && at < 5 && angle(w.heading, w.spot.heading) < 2 && angle(w.spot.heading, w.wind) <= 70)) {
+    adrift.push(`(${Math.round(w.spot.x)}, ${Math.round(w.spot.z)}) on ${w.spot.heading}°: ${w.state}${w.reason ? ` (${w.reason})` : ''}, ${at.toFixed(1)} m from it, ${w.keel} keel points in the water, gear ${w.gear.toFixed(2)}, ${w.speed.toFixed(2)} m/s, heading ${w.heading.toFixed(1)}, wind from ${w.wind}`);
+  }
+}
+check(adrift.length === 0, `8 flights from the menu: afloat at the spot, gear up, at rest, facing its heading within 70° of the wind${adrift.length ? `: ${adrift.join('; ')}` : ''}`);
+const waters = spots.map((w) => w.spot.water);
+const places = new Set(spots.map((w) => `${Math.round(w.spot.x)},${Math.round(w.spot.z)}`)).size;
+check(places === 8 && waters.every((w, k) => k === 0 || w !== waters[k - 1]), `8 different spots, never the same water twice in a row (${waters.join(', ')})`);
+await page.keyboard.press('Backspace');
+await waitFrames(page, 3);
+const back = await afloat();
+const was = spots[7].spot;
+check(back.spot.x === was.x && back.spot.z === was.z && Math.hypot(back.x - was.x, back.z - was.z) < 5, `Restart keeps the spot (${Math.round(was.x)}, ${Math.round(was.z)})`);
 
 const ok = report(problems) && failures === 0;
 console.log(ok ? '\nMODE TESTS OK' : `\nMODE TESTS FAILED (${failures})`);

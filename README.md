@@ -55,8 +55,8 @@ and its instrument panel, even the engine sound. There are no models, textures o
 
 ## Modes
 
-- **Free flight**: take off from a random airstrip (lined up into the wind), from the water, or start
-  in the air.
+- **Free flight**: take off from a random airstrip or a random spot on the water (lined up into the
+  wind), or start in the air.
 - **Ring run**: fourteen gates down the fjord against the clock.
 - **Mountain landing**: a final approach to the mountain strip, graded on sink rate, centreline,
   touchdown point, wings level and rollout.

@@ -13,6 +13,7 @@ import type { FlightModel, PilotInput } from '../sim/aircraft.ts';
 import * as scenarios from '../sim/scenarios.ts';
 import { SIM_DT } from '../sim/scenarios.ts';
 import { Autopilot } from '../sim/autopilot.ts';
+import { WATER_HOME, waterAt } from '../world/waterStart.ts';
 
 export interface ParityStats {
   count: number;
@@ -54,17 +55,23 @@ export function installDebugHooks(app: App): void {
     },
     /** Game sessions: 'free' | 'rings' | 'landing'. */
     session: {
-      /** `strip` (an id) picks the strip of a free flight from a strip; without it, one at random. */
-      start(kind: 'free' | 'rings' | 'landing', start: StartPoint = 'runway', model?: FlightModel, strip?: StripDef['id']) {
+      /**
+       * `where` picks the strip of a free flight from a strip (an id), or the spot of one on the water
+       * ({ x, z, heading }); without it, one at random.
+       */
+      start(kind: 'free' | 'rings' | 'landing', start: StartPoint = 'runway', model?: FlightModel, where?: StripDef['id'] | { x: number; z: number; heading: number }) {
         if (model) {
           app.settings.model = model;
           app.applySettings();
         }
-        const i = STRIPS.findIndex((s) => s.id === strip);
-        app.startSession(kind, start, { strip: i >= 0 ? i : undefined });
+        const i = STRIPS.findIndex((s) => s.id === where);
+        const water = typeof where === 'object' ? { ...where, water: waterAt(where.x, where.z) } : undefined;
+        app.startSession(kind, start, { strip: i >= 0 ? i : undefined, water });
       },
       /** The strip a free flight from a strip uses (id). */
       startStrip: () => STRIPS[app.startStrip].id,
+      /** The spot a free flight on the water uses, and its water (an index into FJORDS, or -1 for the coast). */
+      waterStart: () => ({ ...(app.waterStart ?? WATER_HOME) }),
       hud: () => app.session?.hud() ?? null,
       result: () => app.session?.result ?? null,
       state: () => app.state,
