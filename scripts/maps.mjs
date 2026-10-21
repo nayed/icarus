@@ -85,7 +85,7 @@ async function headingUpCheck(page) {
   await ev(() => {
     const api = window.__icarus;
     api.setTime(15.5);
-    api.session.start('landing');
+    api.session.start('landing', undefined, undefined, 'home');
     api.setCameraMode('chase');
     api.setFixedDt(1 / 60);
   });
@@ -330,12 +330,12 @@ for (const [w, h] of [[1600, 900], [1280, 720], [860, 900]]) {
   check(/^Gate 5 · [\d.]+ k?m · \d{3}°$/.test(s.readout), `ring run: "${s.readout}"`);
   await shot(page, 'maps-pause-rings');
   await page.keyboard.press('KeyP');
-  await ev(() => window.__icarus.session.start('landing'));
+  await ev(() => window.__icarus.session.start('landing', undefined, undefined, 'home'));
   await waitFrames(page, 20);
   await page.keyboard.press('KeyP');
   await page.waitForTimeout(600);
   s = await chart(page);
-  check(/^Hestskar mountain strip · 4\.\d km · 060°$/.test(s.readout), `mountain landing: "${s.readout}"`);
+  check(/^Hestskar mountain strip · 4\.\d km · 060°$/.test(s.readout), `landing on the mountain strip: "${s.readout}"`);
   await shot(page, 'maps-pause-landing');
   await browser.close();
 }

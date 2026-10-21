@@ -6,6 +6,7 @@ import { WorldEnv } from './environment.ts';
 import { Autopilot, idleInput } from './autopilot.ts';
 import { STRIPS, headingDir, type StripDef } from '../world/params.ts';
 import { drawnHeight } from '../world/clipmap.ts';
+import { terrainHeight } from '../world/terrain.ts';
 import { WATER_HOME } from '../world/waterStart.ts';
 import { AIR_SPEED } from '../world/airStart.ts';
 
@@ -59,6 +60,42 @@ export function takeoffHeading(s: StripDef, windFrom: number): number {
     }
   }
   return best;
+}
+
+/** The landing mode's glide path: 4° down to the strip's aim point, the wheels 2.4 m below the aircraft's centre. */
+export const LANDING_GLIDE = { angle: 4, wheels: 2.4 };
+
+/**
+ * A strip's aim point, in metres past the threshold: a sixth of the way along it, at least 60 m. On
+ * Vika's long runway that also clears the bank 200 m short of it by 10 m.
+ */
+export function landingAim(s: StripDef): number {
+  return Math.max(60, Math.round(s.halfLength / 30) * 10);
+}
+
+/**
+ * Where the landing mode starts for strip i, on final for its heading: on the glide path, 4.2 km before
+ * the threshold, or nearer where the ground further out than 1 km comes within 30 m plus 1 % of the
+ * distance of the path (75 m either side of it: Hjelle's final starts past a ridge 2.6 km out). `dist`
+ * is the distance to the threshold.
+ */
+export function approachStart(i: number): { x: number; y: number; z: number; heading: number; dist: number } {
+  const s = STRIPS[i];
+  const [dx, dz] = headingDir(s.heading);
+  const tan = Math.tan((LANDING_GLIDE.angle * Math.PI) / 180);
+  const path = (a: number) => s.elevation + LANDING_GLIDE.wheels + (a + landingAim(s)) * tan;
+  // `a` metres before the threshold, `b` metres to the right of the centreline
+  const at = (a: number, b: number): [number, number] => [s.center[0] - dx * (s.halfLength + a) - dz * b, s.center[1] - dz * (s.halfLength + a) + dx * b];
+  let dist = 4200;
+  for (let a = 1000; a <= 4200; a += 50) {
+    const blocked = [-75, -35, 0, 35, 75].some((b) => Math.max(terrainHeight(...at(a, b), 8), 0) > path(a) - 30 - 0.01 * a);
+    if (blocked) {
+      dist = a - 300;
+      break;
+    }
+  }
+  const [x, z] = at(dist, 0);
+  return { x, y: path(dist), z, heading: s.heading, dist };
 }
 
 export function placeOnRunway(r: Rig, i: number, back: number, heading = STRIPS[i].heading): void {
@@ -237,6 +274,18 @@ export class ApproachController {
       finalSpeed: ac.vel.length(),
     };
   }
+}
+
+/** The landing mode's final for strip i (from approachStart), flown by the autoland as the debug hook flies it. */
+export function landFromFinal(model: FlightModel, i: number): ApproachResult {
+  const r = makeRig(model);
+  const c = new ApproachController(STRIPS[i], false, landingAim(STRIPS[i]) + 10);
+  placeInAir(r.ac, r.env, approachStart(i), 36);
+  r.ac.configure(true, 2);
+  Object.assign(r.inp, { throttle: 0.42, gearDown: true, flapNotch: 2 });
+  r.ac.onTouchdown = (t) => c.onTouchdown(t);
+  run(r, 200, () => c.update(r.ac, r.env, r.inp, SIM_DT));
+  return c.result(r.ac, r.env);
 }
 
 /** Scripted approach and landing on a strip (or a virtual water lane). */

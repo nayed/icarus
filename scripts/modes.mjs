@@ -1,5 +1,6 @@
-// Game modes end to end: ring run (clean and corner-cutting), mountain landing (good and hard), free-flight crash,
-// free flight from a random airstrip, from a random spot on the water and from one in the air.
+// Game modes end to end: ring run (clean and corner-cutting), landing on the mountain strip (good and hard) and on
+// Hjelle, free-flight crash, free flight from a random airstrip, from a random spot on the water and from one in
+// the air, landings on a random strip.
 import { startServer, launch, waitFrames, shot, report } from './harness.mjs';
 
 const args = Object.fromEntries(process.argv.slice(2).map((a) => a.replace(/^--/, '').split('=')));
@@ -46,8 +47,8 @@ await page.evaluate(() => window.__icarus.session.autoRings(45));
 r = await waitResult(240000);
 check(r && r.metrics[1].value !== '14 / 14' && r.subtitle.includes('missed'), `misses are penalised: ${r ? `${r.grade} ${r.headline} (${r.subtitle})` : 'no result'}`);
 
-console.log('\n== mountain landing, autopilot');
-await open('landing');
+console.log('\n== landing on the mountain strip, autopilot');
+await open('landing', '&strip=mountain');
 hud = await page.evaluate(() => window.__icarus.session.hud());
 check(hud?.landing && hud.landing.dist > 3000, `landing HUD: ${hud?.landing ? `threshold ${hud.landing.dist.toFixed(0)} m, glide ${hud.landing.glideDev.toFixed(0)} m, centre ${hud.landing.centreDev.toFixed(0)} m` : 'missing'}`);
 await page.evaluate(() => window.__icarus.session.autoLanding(false));
@@ -60,11 +61,19 @@ check(r && r.success && ['S', 'A', 'B'].includes(r.grade), `good landing: ${r ? 
 await sleep(500);
 await shot(page, 'mode-landing-stopped');
 
-console.log('\n== mountain landing, flown into the ground');
-await open('landing');
+console.log('\n== landing on the mountain strip, flown into the ground');
+await open('landing', '&strip=mountain');
 await page.evaluate(() => window.__icarus.session.autoLanding(true));
 r = await waitResult(240000);
 check(r && (!r.success || ['C', 'D', 'F'].includes(r.grade)), `hard landing: ${r ? `${r.grade} score ${r.headline} (${r.subtitle}) — ${metrics(r)}` : 'no result'}`);
+
+console.log('\n== landing on the Hjelle strip (a short final over the fjord), autopilot');
+await open('landing', '&strip=north');
+hud = await page.evaluate(() => window.__icarus.session.hud());
+check(hud?.landing && hud.landing.dist > 2000 && hud.landing.dist < 2400, `on final ${hud?.landing ? `${hud.landing.dist.toFixed(0)} m from the threshold` : 'missing'}: "${hud?.prompt}"`);
+await page.evaluate(() => window.__icarus.session.autoLanding(false));
+r = await waitResult(240000);
+check(r && r.success && r.title === 'Hjelle fjord strip' && ['S', 'A', 'B'].includes(r.grade), `good landing: ${r ? `${r.title}: ${r.grade} score ${r.headline} (${r.subtitle}) — ${metrics(r)}` : 'no result'}`);
 
 console.log('\n== free flight, dive into the sea');
 await open('free', '&start=air&air=-6000,420,2300,80');
@@ -231,6 +240,46 @@ await waitFrames(page, 3);
 const again2 = await aloft();
 const prev = flights[7].spot;
 check(again2.spot.x === prev.x && again2.spot.y === prev.y && Math.hypot(again2.x - prev.x, again2.z - prev.z) < 60, `Restart keeps the spot (${Math.round(prev.x)}, ${Math.round(prev.y)}, ${Math.round(prev.z)})`);
+
+console.log('\n== landing: a random strip each time, on final for it');
+const onFinal = () => page.evaluate(() => {
+  const app = window.app;
+  const hud = window.__icarus.session.hud();
+  return {
+    id: window.__icarus.session.startStrip(),
+    state: window.__icarus.session.state(),
+    landing: hud?.landing ?? null,
+    prompt: hud?.prompt ?? '',
+    heading: app.telemetry.heading,
+    ias: app.telemetry.ias,
+    gear: app.ac.gear,
+    agl: app.telemetry.agl,
+  };
+});
+const finals = [];
+const offFinal = [];
+const RUNWAY = { coastal: 45, mountain: 60, north: 97, east: 82, south: 131 };
+for (let k = 0; k < 10; k++) {
+  await page.evaluate(() => {
+    const ui = window.app.ui;
+    Object.assign(ui.prefs, { mode: 'landing' });
+    ui.fly();
+  });
+  await waitFrames(page, 3);
+  const f = await onFinal();
+  finals.push(f);
+  const l = f.landing;
+  if (!(f.state === 'flying' && l && l.dist > 2000 && Math.abs(l.centreDev) < 5 && Math.abs(l.glideDev) < 15 && angle(f.heading, RUNWAY[f.id]) < 3 && f.gear === 1 && f.ias > 30 && f.agl > 100 && f.prompt.includes('strip ahead'))) {
+    offFinal.push(`${f.id}: ${f.state}, ${l ? `${l.dist.toFixed(0)} m out, ${l.centreDev.toFixed(1)} m off the centreline, ${l.glideDev.toFixed(1)} m off the glide path` : 'no landing guide'}, heading ${f.heading.toFixed(1)}, ${(f.ias * 1.944).toFixed(0)} kt, gear ${f.gear}, ${f.agl.toFixed(0)} m up, "${f.prompt}"`);
+  }
+}
+check(offFinal.length === 0, `10 landings from the menu: each on final for its strip, 2 km out or more, on the centreline and the glide path, gear down${offFinal.length ? `: ${offFinal.join('; ')}` : ''}`);
+const strips = finals.map((f) => f.id);
+check(new Set(strips).size >= 4 && strips.every((id, k) => k === 0 || id !== strips[k - 1]), `never the same strip twice in a row (${strips.join(', ')})`);
+await page.keyboard.press('Backspace');
+await waitFrames(page, 3);
+const re = await onFinal();
+check(re.id === strips[9] && re.landing && Math.abs(re.landing.dist - finals[9].landing.dist) < 50, `Restart keeps the strip (${strips[9]})`);
 
 const ok = report(problems) && failures === 0;
 console.log(ok ? '\nMODE TESTS OK' : `\nMODE TESTS FAILED (${failures})`);

@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { toScreen, toWorld, screenAngle, bearingDeg, formatDistance, rangeAndBearing, scaleBarLength, type ChartView } from '../src/ui/chart.ts';
 import { Track } from '../src/game/track.ts';
 import { MAP_EXTENT, MAP_HOME, MAP_TEXEL, mapCovers, mapRegionAround } from '../src/render/worldMap.ts';
-import { FJORDS, RELIEF_FJORDS, START_BOX, STRIPS, headingDir } from '../src/world/params.ts';
+import { FJORDS, RELIEF_FJORDS, START_BOX, STRIPS } from '../src/world/params.ts';
+import { approachStart } from '../src/sim/scenarios.ts';
 import { buildCourse } from '../src/game/course.ts';
 
 const DEG = Math.PI / 180;
@@ -73,11 +74,12 @@ describe('map region', () => {
     for (const s of STRIPS) pts.push(s.center as [number, number]);
     const gates = buildCourse();
     for (const g of gates) pts.push([g.x, g.z]);
-    // free-flight starts on the water and in the air, the ring run's start, the landing approach
+    // free-flight starts on the water and in the air, the ring run's start, the landings' finals
     pts.push([2600, 2350], [-6000, 2300], [gates[0].x - gates[0].nx * 1500, gates[0].z - gates[0].nz * 1500]);
-    const m = STRIPS[1];
-    const d = headingDir(m.heading);
-    pts.push([m.center[0] - d[0] * (m.halfLength + 4200), m.center[1] - d[1] * (m.halfLength + 4200)]);
+    for (let i = 0; i < STRIPS.length; i++) {
+      const a = approachStart(i);
+      pts.push([a.x, a.z]);
+    }
     for (const [x, z] of pts) expect(mapCovers(home.x0, home.z0, x, z), `(${x}, ${z})`).toBe(true);
     // random starts (on the water, in the air): at least the HUD map's range (4 km) inside the first map
     const B = START_BOX;

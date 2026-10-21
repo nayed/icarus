@@ -14,7 +14,7 @@ import { PauseMap } from './pauseMap.ts';
 const MODE_INFO: Record<MenuMode, { t: string; d: () => string }> = {
   free: { t: 'Free flight', d: () => 'No clock, no score. Start somewhere at random: on an airstrip, on the water, or in the air.' },
   rings: { t: 'Ring run', d: () => `Fourteen gates down the fjord against the clock. Par ${formatTime(coursePar(buildCourse())).replace(/\.00$/, '')}.` },
-  landing: { t: 'Mountain landing', d: () => 'A short gravel strip on a shelf 800 m up. Graded on the touchdown.' },
+  landing: { t: 'Landing', d: () => 'A final approach to a random airstrip. Graded on the touchdown.' },
 };
 const MODEL_INFO: Record<FlightModel, string> = {
   arcade: 'Rate controls, protected stalls and speeds, forgiving touchdowns. Point and fly.',
@@ -277,7 +277,7 @@ export class UI {
   showPause(tab: PauseTab = 'map'): void {
     this.hideAll();
     const s = this.app.session;
-    const title = this.app.sessionKind === 'rings' ? 'Ring run' : this.app.sessionKind === 'landing' ? 'Mountain landing' : 'Free flight';
+    const title = this.app.sessionKind === 'rings' ? 'Ring run' : this.app.sessionKind === 'landing' ? 'Landing' : 'Free flight';
     (this.root.querySelector('[data-pause-sub]') as HTMLElement).textContent = `${title} · ${formatTime(this.app.simTime).replace(/\.\d+$/, '')} in the air`;
     void s;
     this.syncSliders();

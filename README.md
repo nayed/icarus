@@ -58,15 +58,15 @@ and its instrument panel, even the engine sound. There are no models, textures o
 - **Free flight**: start somewhere new each time: on an airstrip or on the water, lined up into the
   wind, or in the air, most often flying down a valley or a fjord.
 - **Ring run**: fourteen gates down the fjord against the clock.
-- **Mountain landing**: a final approach to the mountain strip, graded on sink rate, centreline,
-  touchdown point, wings level and rollout.
+- **Landing**: a final approach to a random airstrip, graded on sink rate, centreline, touchdown point,
+  wings level and rollout.
 
 <p>
   <img src="docs/screenshots/ring-run.jpg" alt="Lining up for gate 3 of the ring run" width="49%">
   <img src="docs/screenshots/landing.jpg" alt="On final to the mountain strip, with the landing guide" width="49%">
 </p>
 
-![The results card after a mountain landing](docs/screenshots/results.jpg)
+![The results card after landing on the mountain strip](docs/screenshots/results.jpg)
 
 ## Controls
 

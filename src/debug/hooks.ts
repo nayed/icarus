@@ -57,9 +57,10 @@ export function installDebugHooks(app: App): void {
     /** Game sessions: 'free' | 'rings' | 'landing'. */
     session: {
       /**
-       * `where` picks a free flight's start: a strip (its id), a spot on the water ({ x, z, heading }) or
-       * in the air ({ x, y, z, heading }), or 'home', the classic one (the coastal strip, the main fjord
-       * off it, the sea off its mouth: repeatable screenshots and timings); without it, one at random.
+       * `where` picks a free flight's start or a landing's strip: a strip (its id), a spot on the water
+       * ({ x, z, heading }) or in the air ({ x, y, z, heading }), or 'home', the classic one (the coastal
+       * strip, the main fjord off it, the sea off its mouth; the mountain strip for a landing:
+       * repeatable screenshots and timings); without it, one at random.
        */
       start(kind: 'free' | 'rings' | 'landing', start: StartPoint = 'runway', model?: FlightModel, where?: StripDef['id'] | 'home' | { x: number; y?: number; z: number; heading: number }) {
         if (model) {
@@ -67,13 +68,13 @@ export function installDebugHooks(app: App): void {
           app.applySettings();
         }
         const home = where === 'home';
-        const i = home ? 0 : STRIPS.findIndex((s) => s.id === where);
+        const i = home ? (kind === 'landing' ? 1 : 0) : STRIPS.findIndex((s) => s.id === where);
         const spot = typeof where === 'object' ? where : undefined;
         const water = start !== 'water' ? undefined : home ? WATER_HOME : spot && { x: spot.x, z: spot.z, heading: spot.heading, water: waterAt(spot.x, spot.z) };
         const air = start !== 'air' ? undefined : home ? AIR_HOME : spot && { x: spot.x, y: spot.y ?? AIR_HOME.y, z: spot.z, heading: spot.heading };
         app.startSession(kind, start, { strip: i >= 0 ? i : undefined, water, air });
       },
-      /** The strip a free flight from a strip uses (id). */
+      /** The strip a free flight from a strip or a landing uses (id). */
       startStrip: () => STRIPS[app.startStrip].id,
       /** The spot a free flight on the water uses, and its water (an index into FJORDS, or -1 for the coast). */
       waterStart: () => ({ ...(app.waterStart ?? WATER_HOME) }),
@@ -107,9 +108,10 @@ export function installDebugHooks(app: App): void {
         app.onSimStep.push(hook);
         return true;
       },
-      /** Land on the mountain strip with the autopilot; `hard` drives it in with a high sink rate. */
+      /** Land on the landing's strip with the autopilot; `hard` drives it in with a high sink rate. */
       autoLanding(hard = false) {
-        const c = new scenarios.ApproachController(STRIPS[1], false, 70);
+        // aimed a little past the mode's aim point: the flare floats the rest
+        const c = new scenarios.ApproachController(STRIPS[app.startStrip], false, scenarios.landingAim(STRIPS[app.startStrip]) + 10);
         const inp = { ...app.controls.input, flapNotch: 2, gearDown: true, brake: 0 };
         app.inputOverride = inp;
         const prevTd = app.ac.onTouchdown;

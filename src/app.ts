@@ -8,7 +8,7 @@ import { installDebugHooks } from './debug/hooks.ts';
 import { TIME_PRESETS, type TimePreset, elevationDeg } from './world/celestial.ts';
 import { Aircraft, type FlightModel, type PilotInput, type Telemetry } from './sim/aircraft.ts';
 import { WorldEnv } from './sim/environment.ts';
-import { SIM_DT, placeInAir, runwayEnd, takeoffHeading } from './sim/scenarios.ts';
+import { SIM_DT, approachStart, placeInAir, runwayEnd, takeoffHeading } from './sim/scenarios.ts';
 import { Controls, type Action } from './input/controls.ts';
 import { CameraRig, type CameraMode } from './camera/cameras.ts';
 import { PlaneModel } from './plane/planeMesh.ts';
@@ -41,7 +41,7 @@ export interface UiHooks {
   toast(html: string): void;
 }
 
-export type StartPoint = 'runway' | 'water' | 'air' | 'mountain-approach' | 'rings';
+export type StartPoint = 'runway' | 'water' | 'air' | 'approach' | 'rings';
 
 export interface FlightSettings {
   model: FlightModel;
@@ -103,7 +103,7 @@ export class App {
   session: GameMode | null = null;
   sessionKind: ModeKind = 'free';
   sessionStart: StartPoint = 'runway';
-  /** the strip 'runway' starts use (index into STRIPS): a new free flight picks one at random */
+  /** the strip a free flight from a strip starts on, or a landing lands on (index into STRIPS): a new session picks one at random */
   startStrip = 0;
   /** the spot 'water' starts use (WATER_HOME until one is drawn): a new free flight draws one at random */
   waterStart: WaterStart | null = null;
@@ -259,13 +259,8 @@ export class App {
       this.env.follow(w.x, w.z);
       ac.reset(w.x, SEA_LEVEL + 1.85, w.z, w.heading, 0);
       this.controls.reset(0, false, 1);
-    } else if (start === 'mountain-approach') {
-      const s = STRIPS[1];
-      const d = [Math.sin((s.heading * Math.PI) / 180), -Math.cos((s.heading * Math.PI) / 180)];
-      const dist = 4200;
-      const x = s.center[0] - d[0] * (s.halfLength + dist);
-      const z = s.center[1] - d[1] * (s.halfLength + dist);
-      ac.reset(x, s.elevation + 330, z, s.heading, 36);
+    } else if (start === 'approach') {
+      placeInAir(ac, this.env, approachStart(this.startStrip), 36);
       this.controls.reset(0.5, true, 1);
     } else {
       // 'air'
@@ -276,13 +271,13 @@ export class App {
   }
 
   /**
-   * Starts (or restarts) a game mode. A free flight from a strip picks a strip at random, a different
-   * one each time; one on the water a spot in a different water, facing into the wind; one in the air
-   * a spot well away from the last. A restart (`again`) keeps the strip or the spot, and `strip`,
-   * `water` or `air` chooses it.
+   * Starts (or restarts) a game mode. A free flight from a strip and a landing pick a strip at random,
+   * a different one each time; a free flight on the water a spot in a different water, facing into the
+   * wind; one in the air a spot well away from the last. A restart (`again`) keeps the strip or the
+   * spot, and `strip`, `water` or `air` chooses it.
    */
   startSession(kind: ModeKind, start: StartPoint = this.sessionStart, opts: { strip?: number; water?: WaterStart; air?: AirStart; again?: boolean } = {}): void {
-    if (kind === 'free' && start === 'runway') {
+    if ((kind === 'free' && start === 'runway') || kind === 'landing') {
       if (opts.strip !== undefined) this.startStrip = opts.strip;
       else if (!opts.again) this.startStrip = (this.startStrip + 1 + Math.floor(Math.random() * (STRIPS.length - 1))) % STRIPS.length;
     }

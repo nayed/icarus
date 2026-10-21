@@ -17,7 +17,7 @@ not part of this repository.
   forces software rendering):
   - `npm run parity`: GPU ↔ CPU terrain (GLSL vs TS, and the real clipmap meshes rasterised vs `drawnHeight()`)
   - `node scripts/flight.mjs`: keyboard flight tests for each flight model
-  - `node scripts/modes.mjs`: ring run, mountain landing, crash
+  - `node scripts/modes.mjs`: ring run, landings, crash, free flight's random starts
   - `node scripts/uishots.mjs`: menu → flight → pause → results flow, desktop and phone
   - `node scripts/fallbacks.mjs`: no WebGL2, no float render targets, logarithmic depth
   - `node scripts/maps.mjs`: the map image against the terrain, the HUD map heading-up (its pixels
@@ -86,8 +86,14 @@ Menu: Enter flies; Esc on the results card goes back to the menu.
   highest mountains is dropped and another drawn. About a third start over the water. Restart keeps the
   spot. Picking one takes about 8 ms (at most about 40).
 - Ring run: 14 gates down the fjord against the clock (par 4:26); a missed gate costs 5 s. Graded on time.
-- Mountain landing: from a 4 km final to the shelf strip at ~800 m. Graded on sink rate, centreline,
-  touchdown point, wings level and stopping on the strip. A crash or overrun is an F.
+- Landing: a final approach to a random airstrip, never the same twice in a row (Restart keeps it), in
+  along its landing direction (below) at 70 kt through the air, gear down and flaps at 15°. The start is
+  on the HUD's 4° glide path to the strip's aim point, a sixth of the way along the runway and at least
+  60 m in (Hestskar 70 m, Vika 150 m: that also clears the bank 200 m short of Vika's threshold by 10
+  m), 4.2 km out, or nearer where the ground further out comes within 30 m plus 1 % of the distance of
+  the path: Vatne from 3 km, Hjelle from 2.2 km (past a ridge 2.6 km out). Graded on sink rate,
+  centreline, touchdown point (from the aim point), wings level and stopping on the strip. A crash or
+  overrun is an F.
 - Arcade: rate-command attitude, protected stall. Assisted: real aerodynamics with auto-trim, turn
   coordination, wing leveller and stall protection. Simulation: raw aerodynamics with no protections
   (propeller torque, P-factor and adverse yaw are left for the pilot).
@@ -99,13 +105,16 @@ Menu: Enter flies; Esc on the results card goes back to the menu.
   eases out once the stick is released (Assisted's auto-trim would otherwise hold it).
 
 ## Airstrips
-| | where | elevation | runway | take-offs | |
-|---|---|---|---|---|---|
-| Vika | the coast, south of the main fjord's mouth | 20 m | 900 m, paved | 045, 225 | cabin |
-| Hestskar | a shelf north of the main fjord | 798 m | 420 m, gravel | 060, 240 | the mountain landing |
-| Hjelle | a shelf between the northern fjord and its north-east arm | 449 m | 600 m, gravel | 277 (the ground rises east) | cabin |
-| Botn | the valley floor at the head of the main fjord | 80 m | 560 m, gravel | 262 | one way: land 082 from the fjord, take off back over it (a mountain wall beyond); cabin |
-| Vatne | lowland among the southern lakes | 95 m | 680 m, paved | 131, 311 | cabin |
+| | where | elevation | runway | take-offs | landing | |
+|---|---|---|---|---|---|---|
+| Vika | the coast, south of the main fjord's mouth | 20 m | 900 m, paved | 045, 225 | 045, from 4.2 km | cabin |
+| Hestskar | a shelf north of the main fjord | 798 m | 420 m, gravel | 060, 240 | 060, from 4.2 km | |
+| Hjelle | a shelf between the northern fjord and its north-east arm | 449 m | 600 m, gravel | 277 (the ground rises east) | 097, from 2.2 km | cabin |
+| Botn | the valley floor at the head of the main fjord | 80 m | 560 m, gravel | 262 | 082, from 4.2 km | one way: in from the fjord, out back over it (a mountain wall beyond); cabin |
+| Vatne | lowland among the southern lakes | 95 m | 680 m, paved | 131, 311 | 131, from 3 km | cabin |
+
+Each strip is landed on one way, along its heading: the other way, the final crosses hills (Vika,
+Vatne) or rising ground (Hjelle, Botn); Hestskar's other way is untested.
 
 Sites come from `node scripts/stripsearch.ts <region>`: flat over the whole pad, dry, and a clear
 approach on at least one side (the autoland's: 3.5° to an aim point 120 m in, a corridor ±150 m wide,
@@ -159,16 +168,17 @@ grow on a strip, within 35 m of it or 250 m past its ends.
     It shares that panel with the list of keys: Map and Controls tabs; P opens on the map, I on the keys.
 
 ## Verification (this machine: Intel Lunar Lake iGPU, Linux, headless Chromium through ANGLE/EGL)
-- `npm test`: 102 tests pass. Coverage: for each flight model, takeoff, runway rest (< 1 mm drift),
-  landings on all five strips and on the water, take-offs in every listed direction from every strip,
-  water takeoff, take-offs from random spots on the water and a minute's flight on from random spots in
-  the air, both in random winds up to 15 m/s, drop tests (never below the drawn surface beyond tyre
-  compression), stall and recovery, gear-down water crash, speed limits, restarts; plus 150 random water
-  starts (deep, sheltered, a clear take-off into the wind, a different water each time) and their
-  spread, 60 random air starts (150 m clear of the ground on the way ahead, drifting with the wind, and
-  around, checked at full detail and twice as densely as the picker samples; below the clouds; 6 km
-  apart), grading, forest tiling, scaler behaviour, the map's view transform, readouts and track, and
-  what the first map covers.
+- `npm test`: 106 tests pass. Coverage: for each flight model, takeoff, runway rest (< 1 mm drift),
+  landings on all five strips and on the water, landings from each strip's final in the landing mode,
+  take-offs in every listed direction from every strip, water takeoff, take-offs from random spots on
+  the water and a minute's flight on from random spots in the air, both in random winds up to 15 m/s,
+  drop tests (never below the drawn surface beyond tyre compression), stall and recovery, gear-down
+  water crash, speed limits, restarts; plus 150 random water starts (deep, sheltered, a clear take-off
+  into the wind, a different water each time) and their spread, 60 random air starts (150 m clear of the
+  ground on the way ahead, drifting with the wind, and around, checked at full detail and twice as
+  densely as the picker samples; below the clouds; 6 km apart), the landing finals (on the glide path, 2
+  km out or more, well above the ground), grading, forest tiling, scaler behaviour, the map's view
+  transform, readouts and track, and what the first map covers.
 - Keyboard flight tests (real key events, from the coastal strip), all three models:
   - runway rest ≤ 0.16 mm drift in 10 s
   - keyboard takeoff (liftoff after 240–280 m at ~70 kt)
@@ -179,7 +189,7 @@ grow on a strip, within 35 m of it or 250 m past its ends.
 - Modes:
   - autopilot ring run 14/14 (B, 5:19.8)
   - a run 45 m wide of every gate is penalised (C)
-  - autopilot mountain landing (B, 75)
+  - autopilot landings on the mountain strip (A, 84) and on Hjelle from its short final (A, 81)
   - landing flown into the ground (F, gear collapsed)
   - a crash into the sea ends free flight
   - free flight from an airstrip: 12 starts from the menu cover all five strips, never the same twice
@@ -189,6 +199,8 @@ grow on a strip, within 35 m of it or 250 m past its ends.
     spot
   - free flight in the air: 8 starts from the menu, each at least 6 km from the one before, flying from
     its spot on its heading at least 140 m above the ground; Restart keeps the spot
+  - landing: 10 starts from the menu, never the same strip twice in a row; each on final for its strip,
+    2 km out or more, on the centreline and the glide path, gear down; Restart keeps the strip
 - UI flow (menu → Enter → pause → slider → resume → results → menu, and I for the controls in the menu
   and in flight) at 1920×1080 and 390×844. The menu
   fits from 1366×768 up; on shorter screens the settings scroll and Fly stays in view.

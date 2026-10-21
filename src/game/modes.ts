@@ -1,4 +1,4 @@
-// Game modes: free flight, the fjord ring run and the graded mountain landing.
+// Game modes: free flight, the fjord ring run and the graded landing.
 import * as THREE from 'three';
 import type { App, StartPoint } from '../app.ts';
 import { buildCourse, coursePar, type Gate } from './course.ts';
@@ -7,6 +7,7 @@ import type { Touchdown, PilotInput } from '../sim/aircraft.ts';
 import { Autopilot } from '../sim/autopilot.ts';
 import { STRIPS, headingDir } from '../world/params.ts';
 import { runwayLocal } from '../sim/environment.ts';
+import { LANDING_GLIDE, landingAim } from '../sim/scenarios.ts';
 import { globals } from '../render/globals.ts';
 import { ATMOSPHERE_GLSL, SKYVIEW_SAMPLE_GLSL } from '../render/atmosphere.ts';
 import { GLOBALS_GLSL } from '../render/globals.ts';
@@ -331,12 +332,15 @@ export class RingRun extends GameMode {
   }
 }
 
-// ---------------------------------------------------------------- mountain landing
+// ---------------------------------------------------------------- landing
 
-export class MountainLanding extends GameMode {
+/** A final approach to an airstrip (picked at random by App.startSession), graded on the touchdown. */
+export class Landing extends GameMode {
   readonly kind = 'landing' as const;
-  readonly strip = STRIPS[1];
-  readonly aimDist = 60;
+  /** the strip (index into STRIPS), landed on along its heading */
+  readonly index = this.app.startStrip;
+  readonly strip = STRIPS[this.index];
+  readonly aimDist = landingAim(this.strip);
   private td: Touchdown | null = null;
   private bounces = 0;
   private airborneSince = -1;
@@ -345,12 +349,12 @@ export class MountainLanding extends GameMode {
   private maxAlong = -1e9;
 
   begin(): void {
-    this.app.startFlight('mountain-approach');
+    this.app.startFlight('approach');
     this.app.controls.reset(0.42, true, 1);
     this.app.ac.onTouchdown = (t) => {
       if (!this.td) {
         this.td = t;
-        this.tdAlong = runwayLocal(1, t.x, t.z).along;
+        this.tdAlong = runwayLocal(this.index, t.x, t.z).along;
         const fpm = Math.round(t.sinkRate * 196.85);
         this.say(`Touchdown ${fpm} fpm`, fpm < 350 ? 'good' : fpm < 700 ? 'info' : 'warn', 3);
       } else if (this.airborneSince >= 0 && this.app.simTime - this.airborneSince > 0.25) {
@@ -358,7 +362,7 @@ export class MountainLanding extends GameMode {
       }
       this.airborneSince = -1;
     };
-    this.say('Land on the Hestskar strip ahead. Gear down, flaps as needed, aim for the markers.', 'info', 7);
+    this.say(`Land on the ${this.strip.name} ahead. Gear down, flaps as needed, aim for the markers.`, 'info', 7);
   }
 
   override simStep(dt: number): void {
@@ -372,7 +376,7 @@ export class MountainLanding extends GameMode {
     if (this.td) {
       const contact = ac.wheelsOnGround + ac.keelOnGround + ac.keelInWater > 0;
       if (!contact && this.airborneSince < 0) this.airborneSince = this.app.simTime;
-      const local = runwayLocal(1, ac.pos.x, ac.pos.z);
+      const local = runwayLocal(this.index, ac.pos.x, ac.pos.z);
       this.maxAlong = Math.max(this.maxAlong, local.along);
       if (contact && Math.hypot(ac.vel.x, ac.vel.z) < 0.6) this.stoppedFor += dt;
       else this.stoppedFor = 0;
@@ -390,10 +394,11 @@ export class MountainLanding extends GameMode {
     const ac = this.app.ac;
     const td = this.td;
     const thrAlong = -this.strip.halfLength;
-    const tdLocal = td ? runwayLocal(1, td.x, td.z) : { along: thrAlong - 1000, across: 0 };
-    const fin = runwayLocal(1, ac.pos.x, ac.pos.z);
+    const tdLocal = td ? runwayLocal(this.index, td.x, td.z) : { along: thrAlong - 1000, across: 0 };
+    const fin = runwayLocal(this.index, ac.pos.x, ac.pos.z);
     const stopped = !!td && !ac.crashed && Math.abs(fin.along) <= this.strip.halfLength && Math.abs(fin.across) <= this.strip.halfWidth + 2 && Math.hypot(ac.vel.x, ac.vel.z) < 0.6;
     this.result = gradeLanding({
+      strip: this.strip.name,
       sinkRate: td?.sinkRate ?? 0,
       centreline: tdLocal.across,
       pastThreshold: tdLocal.along - thrAlong,
@@ -417,18 +422,17 @@ export class MountainLanding extends GameMode {
   hud(): ModeHud {
     const ac = this.app.ac;
     const s = this.strip;
-    const local = runwayLocal(1, ac.pos.x, ac.pos.z);
+    const local = runwayLocal(this.index, ac.pos.x, ac.pos.z);
     const thrAlong = -s.halfLength;
     const toThr = thrAlong - local.along;
     const aimAlong = thrAlong + this.aimDist;
     const distAim = aimAlong - local.along;
-    // 4° glide path to the aim point
-    const want = s.elevation + 2.4 + Math.max(distAim, 0) * Math.tan((4 * Math.PI) / 180);
+    const want = s.elevation + LANDING_GLIDE.wheels + Math.max(distAim, 0) * Math.tan((LANDING_GLIDE.angle * Math.PI) / 180);
     const d = headingDir(s.heading);
     const thx = s.center[0] + d[0] * aimAlong;
     const thz = s.center[1] + d[1] * aimAlong;
     return {
-      title: 'Mountain landing',
+      title: 'Landing',
       landing: this.td ? undefined : { dist: toThr, glideDev: ac.pos.y - want, centreDev: local.across, targetKt: 58 },
       target: this.td ? undefined : { label: 'AIM', ...this.aim(thx, s.elevation + 1, thz) },
       map: { strip: STRIPS.indexOf(s) },
@@ -482,6 +486,6 @@ export class AttractFlight extends GameMode {
 export function createMode(app: App, kind: ModeKind, start: StartPoint = 'runway'): GameMode {
   if (kind === 'attract') return new AttractFlight(app);
   if (kind === 'rings') return new RingRun(app);
-  if (kind === 'landing') return new MountainLanding(app);
+  if (kind === 'landing') return new Landing(app);
   return new FreeFlight(app, start);
 }

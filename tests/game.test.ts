@@ -3,6 +3,7 @@ import { gradeLanding, gradeRings, gradeFromScore, type LandingInput } from '../
 import { buildCourse, courseClearance, courseLength, coursePar, GATE_COUNT } from '../src/game/course.ts';
 
 const good: LandingInput = {
+  strip: 'Hestskar mountain strip',
   sinkRate: 1.0, centreline: 0.8, pastThreshold: 65, aim: 60, runwayLength: 420, bank: 0.5, bounces: 0,
   stoppedOnRunway: true, crashed: false, crashReason: '', gearDown: true, onRunway: true, rollout: 180,
 };
@@ -12,6 +13,7 @@ describe('landing grade', () => {
     const r = gradeLanding(good);
     expect(['S', 'A']).toContain(r.grade);
     expect(r.success).toBe(true);
+    expect(r.title).toBe('Hestskar mountain strip');
   });
   it('penalises a hard landing, a long landing, and a bounce', () => {
     expect(Number(gradeLanding({ ...good, sinkRate: 4.0 }).headline)).toBeLessThan(Number(gradeLanding(good).headline) - 20);

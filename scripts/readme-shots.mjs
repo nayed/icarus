@@ -135,11 +135,11 @@ await ev(() => window.__icarus.setFixedDt(1 / 60));
 await waitFrames(page, 20);
 await save('ring-run');
 
-// mountain landing: on final with the landing guide, then the results card
+// landing on the mountain strip: on final with the landing guide, then the results card
 await ev(() => {
   const api = window.__icarus;
   api.setTime(14.5);
-  api.session.start('landing');
+  api.session.start('landing', undefined, undefined, 'home');
   api.setCameraMode('chase');
   window.app.hudVisible = true;
   api.session.autoLanding(false);

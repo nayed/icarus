@@ -17,7 +17,7 @@ live in NOTES.md; keep them current when behaviour changes.
 - Browser checks, headless Chromium; each fails on any console error, shader error or failed request:
   - `npm run parity`: terrain identical on CPU and GPU
   - `node scripts/flight.mjs [--models=simulation]`: keyboard flight tests per flight model
-  - `node scripts/modes.mjs`: ring run, mountain landing, crash, free flight's random starts
+  - `node scripts/modes.mjs`: ring run, landings, crash, free flight's random starts
   - `node scripts/uishots.mjs`: menu → flight → pause → results flow, desktop and phone
   - `node scripts/fallbacks.mjs`: `?force=nowebgl2|nofloat|logdepth`
   - `node scripts/maps.mjs`: the map image, the HUD's moving map and the pause screen's chart
@@ -43,7 +43,9 @@ live in NOTES.md; keep them current when behaviour changes.
   skipped outside `FJORD_BOX`, whose reach mirrors `carveFjord()`'s widths, coves and walls: change them
   together, or the skip stops being exact (parity catches it only where it samples).
 - Airstrips are `STRIPS` in `params.ts`: find a site with `node scripts/stripsearch.ts`, add an autoland
-  test (`tests/flight.test.ts`), and append (the mountain landing uses index 1).
+  test (`tests/flight.test.ts`), and append (scripts pin index 0 and 1, Vika and Hestskar, as the classic
+  runway start and landing). The landing mode flies in along the strip's heading from `approachStart()`
+  (`src/sim/scenarios.ts`): `tests/landing.test.ts` checks the final is clear and lands on it.
 - Free flights on the water and in the air start at random spots (`src/world/waterStart.ts`,
   `src/world/airStart.ts`), checked on the CPU terrain. The water checks assume a lift-off within 700 m
   and seas no rougher than `MAX_SEA`: retune them with the flight model or the waves (the tests fly

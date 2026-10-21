@@ -112,7 +112,7 @@ for (const [w, h, tag] of [[1920, 1080, 'desktop'], [390, 844, 'phone']]) {
     await sleep(400);
     check((await panel()).state === 'flying', 'P resumes');
     // results: a landing flown by the autopilot (fast-forwarded)
-    await page.evaluate(() => { window.__icarus.setTime(18.0); window.__icarus.session.start('landing'); window.__icarus.setFixedDt(1 / 12); window.__icarus.session.autoLanding(false); });
+    await page.evaluate(() => { window.__icarus.setTime(18.0); window.__icarus.session.start('landing', undefined, undefined, 'home'); window.__icarus.setFixedDt(1 / 12); window.__icarus.session.autoLanding(false); });
     await page.waitForFunction(() => window.__icarus.session.state() === 'results', null, { timeout: 240000 });
     await page.evaluate(() => window.__icarus.setFixedDt(null));
     await sleep(1800);

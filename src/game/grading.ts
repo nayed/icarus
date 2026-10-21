@@ -44,6 +44,8 @@ function curve(x: number, keys: [number, number][]): number {
 }
 
 export interface LandingInput {
+  /** the strip's name (the result card's title) */
+  strip: string;
   /** m/s, positive down */
   sinkRate: number;
   /** m from the centreline */
@@ -94,7 +96,7 @@ export function gradeLanding(l: LandingInput): ModeResult {
               : 'Down and stopped';
   return {
     mode: 'landing',
-    title: 'Hestskar mountain strip',
+    title: l.strip,
     grade,
     headline: String(score),
     subtitle,
