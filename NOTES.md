@@ -159,7 +159,9 @@ grow on a strip, within 35 m of it or 250 m past its ends.
 - `src/ui/chart.ts` draws it (one view transform for the terrain, the strips, the gates and the
   aircraft), for two maps:
   - the HUD's moving map: heading-up, 4 km to the rim, top right. The next gate or the landing aim point
-    beyond the rim shows as a caret on the rim.
+    beyond the rim shows as a caret on the rim. Under it (in its corner when the map is off) two lines:
+    the camera and the frame rate (counted over half a second), the time of day and the wind (where it
+    blows from, in knots, and an arrow, heading-up like the map, for the way it blows: up is a tailwind).
   - the pause screen's chart (`src/ui/pauseMap.ts`): north up, opens on the aircraft 18 km across
     (3 to 48 km), with the strips by name, the ring-run gates by number, a 5 km grid, a scale bar and
     the track flown this session (`src/game/track.ts`: a point every 25 m, the last 100 km). Above it,

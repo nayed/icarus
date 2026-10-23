@@ -46,7 +46,8 @@ and its instrument panel, even the engine sound. There are no models, textures o
 - **Three flight models**: *Arcade* is forgiving, *Assisted* adds coordination, wing levelling, and stall
   and overspeed protection to real aerodynamics, and *Simulation* leaves it all to you.
 - **Chase, cockpit and cinematic cameras**, and a HUD with airspeed (knots), altitude (feet), heading,
-  vertical speed (feet per minute) and throttle, with stall and overspeed warnings.
+  vertical speed (feet per minute) and throttle, with stall and overspeed warnings, and a status line
+  under the map: camera, frame rate, time of day and the wind, with an arrow for the way it blows.
 - **Maps**, drawn from the same terrain function on the GPU: a moving map in the corner of the HUD that
   turns with the aircraft (M hides it), and on the pause screen a chart of the fjord with the airstrips,
   the ring-run gates and the track you have flown, which you can zoom and drag.

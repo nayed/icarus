@@ -1,5 +1,6 @@
 // Canvas HUD: speed/altitude tapes, heading tape, vertical speed, throttle, status chips,
-// flight-path marker, target indicator and mode widgets. Device-pixel-ratio aware.
+// flight-path marker, target indicator, mode widgets, the moving map and a status readout under it
+// (camera, frame rate, time of day, wind). Device-pixel-ratio aware.
 import * as THREE from 'three';
 import type { Telemetry } from '../sim/aircraft.ts';
 import type { ModeHud } from '../game/modes.ts';
@@ -43,6 +44,10 @@ export class Hud {
   private blink = 0;
   /** screen box of the moving map this frame (keeps the target arrow off it) */
   private mapBox: { x0: number; y0: number; x1: number; y1: number } | null = null;
+  /** the frame rate readout: frames counted since `fpsSince` (ms), the last rate (0 until the first count) */
+  private fpsFrames = 0;
+  private fpsSince = 0;
+  private fps = 0;
 
   constructor(readonly canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d')!;
@@ -93,6 +98,7 @@ export class Hud {
 
     this.mapBox = null;
     if (i.showMap && i.map) this.minimap(i, small);
+    this.status(i, small);
     if (i.cameraMode === 'cockpit') this.horizon(i, cx, cy);
     this.flightPath(i);
     if (i.mode?.target) this.target(i);
@@ -389,6 +395,63 @@ export class Hud {
     c.lineWidth = 1.5;
     c.stroke();
     this.text(String(Math.round(hdg) % 360).padStart(3, '0'), cx, y - 1, 18, INK, 'center', 0.06);
+  }
+
+  /**
+   * Camera, frame rate, time of day and wind, right-aligned under the moving map (in its corner when the
+   * map is off). The arrow is the way the wind blows, heading up like the map: up is a tailwind.
+   */
+  private status(i: HudInput, small: boolean): void {
+    // frames per second, counted over half a second so the number does not flicker
+    const now = performance.now();
+    this.fpsFrames++;
+    if (now - this.fpsSince >= 500) {
+      if (this.fpsSince > 0) this.fps = Math.round((this.fpsFrames * 1000) / (now - this.fpsSince));
+      this.fpsSince = now;
+      this.fpsFrames = 0;
+    }
+    const margin = small ? 16 : 34;
+    const x = this.w - margin;
+    const size = small ? 11 : 12;
+    const y = this.mapBox ? this.mapBox.y1 + (small ? 14 : 20) : margin;
+    const y2 = y + size + (small ? 6 : 7);
+    const camera = { chase: 'CHASE', cockpit: 'COCKPIT', cinematic: 'CINEMATIC', free: 'FREE CAMERA' }[i.cameraMode];
+    this.text(`${camera} · ${this.fps || '—'} FPS`, x, y, size, MUTED, 'right', 0.16);
+    const minutes = Math.round((((i.timeOfDay % 24) + 24) % 24) * 60) % 1440;
+    const clock = `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+    const kt = Math.round(i.windKt);
+    if (kt < 1) {
+      this.text(`${clock} · WIND CALM`, x, y2, size, MUTED, 'right', 0.16);
+      return;
+    }
+    const from = String(Math.round(i.windFrom) % 360).padStart(3, '0');
+    const r = small ? 6 : 7;
+    this.text(`${clock} · WIND ${from}° ${kt} KT`, x - 2 * r - 6, y2, size, MUTED, 'right', 0.16);
+    this.windArrow(x - r, y2, r, ((i.windFrom + 180 - i.tel.heading) * Math.PI) / 180);
+  }
+
+  /** An arrow of half-length r centred on (x, y), pointing `a` radians clockwise from up. */
+  private windArrow(x: number, y: number, r: number, a: number): void {
+    const c = this.ctx;
+    c.save();
+    c.translate(x, y);
+    c.rotate(a);
+    this.halo(true);
+    c.strokeStyle = MUTED;
+    c.fillStyle = MUTED;
+    c.lineWidth = 1.6;
+    c.beginPath();
+    c.moveTo(0, r);
+    c.lineTo(0, -r + 3);
+    c.stroke();
+    c.beginPath();
+    c.moveTo(0, -r - 1);
+    c.lineTo(3.6, -r + 4.5);
+    c.lineTo(-3.6, -r + 4.5);
+    c.closePath();
+    c.fill();
+    this.halo(false);
+    c.restore();
   }
 
   private compactReadout(i: HudInput): void {
