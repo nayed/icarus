@@ -398,8 +398,9 @@ export class Hud {
   }
 
   /**
-   * Camera, frame rate, time of day and wind, right-aligned under the moving map (in its corner when the
-   * map is off). The arrow is the way the wind blows, heading up like the map: up is a tailwind.
+   * Camera, frame rate, time of day and wind, centred under the moving map (in its corner when the map is
+   * off; nearer the middle where a centred line would run off the screen). The arrow is the way the
+   * wind blows, heading up like the map: up is a tailwind.
    */
   private status(i: HudInput, small: boolean): void {
     // frames per second, counted over half a second so the number does not flicker
@@ -411,23 +412,29 @@ export class Hud {
       this.fpsFrames = 0;
     }
     const margin = small ? 16 : 34;
-    const x = this.w - margin;
     const size = small ? 11 : 12;
+    const track = 0.16;
     const y = this.mapBox ? this.mapBox.y1 + (small ? 14 : 20) : margin;
     const y2 = y + size + (small ? 6 : 7);
     const camera = { chase: 'CHASE', cockpit: 'COCKPIT', cinematic: 'CINEMATIC', free: 'FREE CAMERA' }[i.cameraMode];
-    this.text(`${camera} · ${this.fps || '—'} FPS`, x, y, size, MUTED, 'right', 0.16);
+    const line1 = `${camera} · ${this.fps || '—'} FPS`;
     const minutes = Math.round((((i.timeOfDay % 24) + 24) % 24) * 60) % 1440;
     const clock = `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
     const kt = Math.round(i.windKt);
-    if (kt < 1) {
-      this.text(`${clock} · WIND CALM`, x, y2, size, MUTED, 'right', 0.16);
-      return;
-    }
-    const from = String(Math.round(i.windFrom) % 360).padStart(3, '0');
+    const line2 = kt < 1 ? `${clock} · WIND CALM` : `${clock} · WIND ${String(Math.round(i.windFrom) % 360).padStart(3, '0')}° ${kt} KT`;
+    // the second line's text, then a gap and the arrow
     const r = small ? 6 : 7;
-    this.text(`${clock} · WIND ${from}° ${kt} KT`, x - 2 * r - 6, y2, size, MUTED, 'right', 0.16);
-    this.windArrow(x - r, y2, r, ((i.windFrom + 180 - i.tel.heading) * Math.PI) / 180);
+    const c = this.ctx;
+    c.font = `600 ${size}px ${FONT}`;
+    (c as unknown as { letterSpacing: string }).letterSpacing = `${(size * track).toFixed(1)}px`;
+    const w1 = c.measureText(line1).width;
+    const w2 = c.measureText(line2).width;
+    (c as unknown as { letterSpacing: string }).letterSpacing = '0px';
+    const g2 = kt < 1 ? w2 : w2 + 6 + 2 * r;
+    const x = Math.min(this.mapPlace(small).cx, this.w - margin - Math.max(w1, g2) / 2);
+    this.text(line1, x, y, size, MUTED, 'center', track);
+    this.text(line2, x - g2 / 2, y2, size, MUTED, 'left', track);
+    if (kt >= 1) this.windArrow(x + g2 / 2 - r, y2, r, ((i.windFrom + 180 - i.tel.heading) * Math.PI) / 180);
   }
 
   /** An arrow of half-length r centred on (x, y), pointing `a` radians clockwise from up. */
@@ -701,12 +708,15 @@ export class Hud {
   }
 
   /** Heading-up moving map in the top-right corner: terrain, strips, the course, the aircraft. */
+  /** Where the moving map goes: its centre and radius (the status lines line up on it even when it is off). */
+  private mapPlace(small: boolean): { cx: number; cy: number; r: number } {
+    const r = (small ? 96 : Math.round(Math.min(168, Math.max(128, this.h * 0.21)))) / 2;
+    return { cx: this.w - (small ? 16 : 34) - r, cy: (small ? 16 : 34) + r, r };
+  }
+
   private minimap(i: HudInput, small: boolean): void {
     const c = this.ctx;
-    const d = small ? 96 : Math.round(Math.min(168, Math.max(128, this.h * 0.21)));
-    const r = d / 2;
-    const cx = this.w - (small ? 16 : 34) - r;
-    const cy = (small ? 16 : 34) + r;
+    const { cx, cy, r } = this.mapPlace(small);
     this.mapBox = { x0: cx - r, y0: cy - r, x1: cx + r, y1: cy + r };
     const hdg = (i.tel.heading * Math.PI) / 180;
     const view: ChartView = { sx: cx, sy: cy, wx: i.aircraftPos.x, wz: i.aircraftPos.z, scale: r / MINIMAP_RANGE, up: hdg };
@@ -725,7 +735,7 @@ export class Hud {
     g.addColorStop(0, 'rgba(9,12,16,0)');
     g.addColorStop(1, 'rgba(9,12,16,0.5)');
     c.fillStyle = g;
-    c.fillRect(cx - r, cy - r, d, d);
+    c.fillRect(cx - r, cy - r, 2 * r, 2 * r);
     // half-range ring
     c.strokeStyle = 'rgba(236,232,224,0.16)';
     c.lineWidth = 1;
