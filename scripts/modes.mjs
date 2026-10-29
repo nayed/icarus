@@ -1,4 +1,4 @@
-// Game modes end to end: ring run (clean on both circuits, and corner-cutting), landing on the mountain strip (good and hard) and on
+// Game modes end to end: ring run (clean on each circuit, and corner-cutting), landing on the mountain strip (good and hard) and on
 // Hjelle, free-flight crash, free flight from a random airstrip, from a random spot on the water and from one in
 // the air, landings on a random strip.
 import { startServer, launch, waitFrames, shot, report } from './harness.mjs';
@@ -53,6 +53,19 @@ r = await waitResult(240000, async () => {
   else if (shots === 1 && h.timerSub?.startsWith('Gate 11')) { shots++; await shot(page, 'mode-summits-cinematic'); }
 });
 check(r && r.success && r.title === 'Tinderunden' && r.metrics[1].value === '14 / 14', `clean run: ${r ? `${r.title} ${r.grade} ${r.headline} (${r.subtitle}) — ${metrics(r)}` : 'no result'}`);
+
+console.log('\n== ring run on Holmeleia, round the island, autopilot');
+await open('rings', '&course=islands');
+await page.evaluate(() => window.__icarus.session.autoRings(0));
+shots = 0;
+let minAgl = Infinity;
+r = await waitResult(240000, async () => {
+  const [h, s] = await page.evaluate(() => [window.__icarus.session.hud(), window.__icarus.flight.state()]);
+  minAgl = Math.min(minAgl, s.agl);
+  if (shots === 0 && h.timerSub?.startsWith('Gate 3')) { shots++; await shot(page, 'mode-islands-chase'); await page.evaluate(() => window.__icarus.setCameraMode('cinematic')); }
+  else if (shots === 1 && h.timerSub?.startsWith('Gate 9')) { shots++; await shot(page, 'mode-islands-cinematic'); }
+});
+check(r && r.success && r.title === 'Holmeleia' && r.metrics[1].value === '14 / 14' && minAgl > 30, `clean run, never below ${minAgl.toFixed(0)} m: ${r ? `${r.title} ${r.grade} ${r.headline} (${r.subtitle}) — ${metrics(r)}` : 'no result'}`);
 
 console.log('\n== ring run, cutting 45 m wide of every gate');
 await open('rings');

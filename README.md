@@ -60,8 +60,9 @@ and its instrument panel, even the engine sound. There are no models, textures o
   wind, or in the air, most often flying down a valley or a fjord.
 - **Landing**: a final approach to a random airstrip, graded on sink rate, centreline, touchdown point,
   wings level and rollout.
-- **Ring run**: fourteen gates against the clock, on one of two circuits: down the fjord, low over the
-  water, or round the highest summit, through its passes, a thousand metres up.
+- **Ring run**: fourteen gates against the clock, on one of three circuits: down the fjord, low over the
+  water; round the highest summit, through its passes, a thousand metres up; or round the big island
+  off the coast, through the sounds, low over the open sea.
 
 <p>
   <img src="docs/screenshots/ring-run.jpg" alt="Lining up for gate 3 of the ring run" width="49%">

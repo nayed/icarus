@@ -434,9 +434,10 @@ export function ringSteer(ac: Aircraft, from: { x: number; y: number; z: number 
 /**
  * The autopilot flies a ring course from `start` (as the ring run places it: 47 m/s, 72 % power,
  * gear up, flaps up), gate by gate, counting a gate passed when the aircraft crosses its plane
- * inside the ring; `worst` is the furthest from a gate's centre it crossed (m).
+ * inside the ring; `misses` are the gates missed (numbered from 1), `worst` the furthest from a
+ * gate's centre it crossed (m).
  */
-export function ringRun(model: FlightModel, gates: readonly RingGate[], start: { x: number; y: number; z: number; heading: number }, wind = { from: 40, speed: 4 }): { passed: number; missed: number; worst: number; seconds: number; minAgl: number; crashed: boolean; crashReason: string } {
+export function ringRun(model: FlightModel, gates: readonly RingGate[], start: { x: number; y: number; z: number; heading: number }, wind = { from: 40, speed: 4 }): { passed: number; missed: number; misses: number[]; worst: number; seconds: number; minAgl: number; crashed: boolean; crashReason: string } {
   const r = makeRig(model);
   r.env.setWind(wind.from, wind.speed);
   r.env.follow(start.x, start.z);
@@ -447,6 +448,7 @@ export function ringRun(model: FlightModel, gates: readonly RingGate[], start: {
   let passed = 0;
   let minAgl = Infinity;
   let worst = 0;
+  const misses: number[] = [];
   const prev = r.ac.pos.clone();
   const side = (g: RingGate, p: THREE.Vector3) => (p.x - g.x) * g.nx + (p.z - g.z) * g.nz;
   let steps = 0;
@@ -463,10 +465,11 @@ export function ringRun(model: FlightModel, gates: readonly RingGate[], start: {
       const miss = Math.hypot(p.x - g.x, p.y - g.y, p.z - g.z);
       worst = Math.max(worst, miss);
       if (miss <= g.radius) passed++;
+      else misses.push(next + 1);
       next++;
     }
     prev.copy(p);
   }
   const seconds = steps * SIM_DT;
-  return { passed, missed: next - passed, worst, seconds, minAgl, crashed: r.ac.crashed, crashReason: r.ac.crashReason };
+  return { passed, missed: next - passed, misses, worst, seconds, minAgl, crashed: r.ac.crashed, crashReason: r.ac.crashReason };
 }

@@ -72,13 +72,6 @@ describe('map region', () => {
     const pts: [number, number][] = [];
     for (const f of FJORDS.slice(0, RELIEF_FJORDS)) pts.push(...(f.points as [number, number][]));
     for (const s of STRIPS) pts.push(s.center as [number, number]);
-    // the circuits (their tiles in the menu are drawn from this map too) and their starts
-    for (const c of COURSES) {
-      const gates = buildCourse(c.id);
-      for (const g of gates) pts.push([g.x, g.z]);
-      const s = courseStart(gates);
-      pts.push([s.x, s.z]);
-    }
     // free-flight starts on the water and in the air, the landings' finals
     pts.push([2600, 2350], [-6000, 2300]);
     for (let i = 0; i < STRIPS.length; i++) {
@@ -86,6 +79,12 @@ describe('map region', () => {
       pts.push([a.x, a.z]);
     }
     for (const [x, z] of pts) expect(mapCovers(home.x0, home.z0, x, z), `(${x}, ${z})`).toBe(true);
+    // the circuits and their starts: their tiles in the menu are drawn from this map (with 900 m
+    // around each course); flying one near its edge bakes a new map around the aircraft
+    for (const c of COURSES) {
+      const gates = buildCourse(c.id);
+      for (const g of [...gates, courseStart(gates)]) expect(mapCovers(home.x0, home.z0, g.x, g.z, 1500), `${c.name} (${g.x}, ${g.z})`).toBe(true);
+    }
     // random starts (on the water, in the air): at least the HUD map's range (4 km) inside the first map
     const B = START_BOX;
     for (const [x, z] of [[B[0], B[1]], [B[2], B[3]]]) expect(mapCovers(home.x0, home.z0, x, z, 4000), `(${x}, ${z})`).toBe(true);

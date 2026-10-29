@@ -1,8 +1,9 @@
-// The ring-run circuits, 14 gates each. Fjordruta runs down the main fjord and into the north arm,
+// The ring-run circuits, 14 gates each (COURSES, in the order the menu shows them). Fjordruta runs down the main fjord and into the north arm,
 // generated from the fjord polylines and recentred on the actual water in each cross-section.
 // Tinderunden goes round the highest summit (1530 m) at 800–1190 m, through the pass and the saddle
 // between it and the ridges around it: placed by hand, each gate as low as the ground under it and
 // the legs to it allow, and no leg climbing more than 7 % (the aircraft climbs at about 11 %).
+// Holmeleia goes round the big island off the coast at 55–70 m over the sea, placed by hand.
 // tests/game.test.ts checks both for clearance and flies them with the autopilot.
 import { FJORDS, SEA_LEVEL } from '../world/params.ts';
 import { terrainHeight } from '../world/terrain.ts';
@@ -64,7 +65,7 @@ export function waterSection(x: number, z: number, nx: number, nz: number): { cx
   return { cx: x + nx * mid, cz: z + nz * mid, width: hi - lo };
 }
 
-export type CourseId = 'fjord' | 'summits';
+export type CourseId = 'fjord' | 'summits' | 'islands';
 
 export interface CourseDef {
   id: CourseId;
@@ -76,6 +77,7 @@ export interface CourseDef {
 export const COURSES: readonly CourseDef[] = [
   { id: 'fjord', name: 'Fjordruta', blurb: 'Down the fjord and into the north arm, low over the water.' },
   { id: 'summits', name: 'Tinderunden', blurb: 'Round the highest summit, through its passes, a thousand metres up.' },
+  { id: 'islands', name: 'Holmeleia', blurb: 'Round the big island off the coast and through the sounds, low over the open sea.' },
 ];
 
 export function courseDef(id: CourseId): CourseDef {
@@ -94,6 +96,18 @@ const SUMMIT_GATES: readonly [number, number, number][] = [
   [15200, 1135, -4500], [15200, 1185, -3300], [14400, 1075, -2400], [14500, 975, -1300],
 ];
 
+/**
+ * Holmeleia's gates (x, height, z), clockwise round the hook-shaped island off the fjord's mouth, 300 to
+ * 650 m off its shores and 55–70 m over the sea: west through the sound between it and the round island
+ * to its south, through the gap by the islet south-west of it, north along its west coast, round its
+ * head, and back south down its east side.
+ */
+const ISLAND_GATES: readonly [number, number, number][] = [
+  [-7300, 60, 3050], [-8300, 55, 3130], [-9400, 60, 3400], [-10400, 65, 2950], [-10450, 55, 1900],
+  [-10450, 55, 800], [-10850, 60, -150], [-11950, 70, -800], [-11850, 60, -2000], [-10650, 55, -2650],
+  [-9350, 65, -2500], [-8150, 60, -2000], [-7600, 55, -850], [-7800, 55, 450],
+];
+
 /** Gates through the points (x, y, z), each facing along the line from the gate before it to the one after. */
 function gatesThrough(pts: readonly (readonly [number, number, number])[]): Gate[] {
   return pts.map(([x, y, z], i) => {
@@ -110,7 +124,7 @@ const cached = new Map<CourseId, Gate[]>();
 
 export function buildCourse(id: CourseId = 'fjord'): Gate[] {
   let gates = cached.get(id);
-  if (!gates) cached.set(id, (gates = id === 'summits' ? gatesThrough(SUMMIT_GATES) : fjordGates()));
+  if (!gates) cached.set(id, (gates = id === 'summits' ? gatesThrough(SUMMIT_GATES) : id === 'islands' ? gatesThrough(ISLAND_GATES) : fjordGates()));
   return gates;
 }
 
