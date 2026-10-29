@@ -13,8 +13,8 @@ import { PauseMap } from './pauseMap.ts';
 
 const MODE_INFO: Record<MenuMode, { t: string; d: () => string }> = {
   free: { t: 'Free flight', d: () => 'No clock, no score. Start somewhere at random: on an airstrip, on the water, or in the air.' },
-  rings: { t: 'Ring run', d: () => `Fourteen gates down the fjord against the clock. Par ${formatTime(coursePar(buildCourse())).replace(/\.00$/, '')}.` },
   landing: { t: 'Landing', d: () => 'A final approach to a random airstrip. Graded on the touchdown.' },
+  rings: { t: 'Ring run', d: () => `Fourteen gates down the fjord against the clock. Par ${formatTime(coursePar(buildCourse())).replace(/\.00$/, '')}.` },
 };
 const MODEL_INFO: Record<FlightModel, string> = {
   arcade: 'Rate controls, protected stalls and speeds, forgiving touchdowns. Point and fly.',

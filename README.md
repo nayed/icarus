@@ -58,9 +58,9 @@ and its instrument panel, even the engine sound. There are no models, textures o
 
 - **Free flight**: start somewhere new each time: on an airstrip or on the water, lined up into the
   wind, or in the air, most often flying down a valley or a fjord.
-- **Ring run**: fourteen gates down the fjord against the clock.
 - **Landing**: a final approach to a random airstrip, graded on sink rate, centreline, touchdown point,
   wings level and rollout.
+- **Ring run**: fourteen gates down the fjord against the clock.
 
 <p>
   <img src="docs/screenshots/ring-run.jpg" alt="Lining up for gate 3 of the ring run" width="49%">

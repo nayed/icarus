@@ -85,7 +85,6 @@ Menu: Enter flies; Esc on the results card goes back to the menu.
   along and 75 m across. Starts stay below 1300 m, under the clouds (base 1550 m): a spot among the
   highest mountains is dropped and another drawn. About a third start over the water. Restart keeps the
   spot. Picking one takes about 8 ms (at most about 40).
-- Ring run: 14 gates down the fjord against the clock (par 4:26); a missed gate costs 5 s. Graded on time.
 - Landing: a final approach to a random airstrip, never the same twice in a row (Restart keeps it), in
   along its landing direction (below) at 70 kt through the air, gear down and flaps at 15°. The start is
   on the HUD's 4° glide path to the strip's aim point, a sixth of the way along the runway and at least
@@ -94,6 +93,7 @@ Menu: Enter flies; Esc on the results card goes back to the menu.
   the path: Vatne from 3 km, Hjelle from 2.2 km (past a ridge 2.6 km out). Graded on sink rate,
   centreline, touchdown point (from the aim point), wings level and stopping on the strip. A crash or
   overrun is an F.
+- Ring run: 14 gates down the fjord against the clock (par 4:26); a missed gate costs 5 s. Graded on time.
 - Arcade: rate-command attitude, protected stall. Assisted: real aerodynamics with auto-trim, turn
   coordination, wing leveller and stall protection. Simulation: raw aerodynamics with no protections
   (propeller torque, P-factor and adverse yaw are left for the pilot).
