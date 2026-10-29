@@ -397,3 +397,76 @@ export function drop(model: FlightModel, label: string, x: number, z: number, he
   }, false);
   return { label, minTerrainClearance: minT, minWaterClearance: minW, restHeight: r.ac.pos.y - g, finalSpeed: r.ac.vel.length(), crashed: r.ac.crashed };
 }
+
+/** A ring-run gate, as the course builds it (src/game/course.ts). */
+export interface RingGate {
+  x: number;
+  y: number;
+  z: number;
+  nx: number;
+  nz: number;
+  radius: number;
+}
+
+/**
+ * The autopilot's way through the next gate, coming from `from` (the gate before, or the start):
+ * line following onto the gate's axis over the ground, offset sideways by `cut` (to test misses), and the height
+ * along the straight line between the two, looked ahead by 350 m so the climbs and dives start in
+ * time. Used by the ring tests here and by the in-browser hook.
+ */
+export function ringSteer(ac: Aircraft, from: { x: number; y: number; z: number }, g: RingGate, cut = 0): { heading: number; altitude: number } {
+  const cx = g.x - g.nz * cut;
+  const cz = g.z + g.nx * cut;
+  const rx = ac.pos.x - cx;
+  const rz = ac.pos.z - cz;
+  const along = -(rx * g.nx + rz * g.nz);
+  const cross = rx * -g.nz + rz * g.nx; // + right of the line
+  const look = Math.max(140, along * 0.35);
+  const gateHdg = (Math.atan2(g.nx, -g.nz) * 180) / Math.PI;
+  const corr = clamp((Math.atan2(cross, look) * 180) / Math.PI, -65, 65);
+  // the heading that makes good that track over the ground: the wind's drift, from the velocity
+  const drift = ((((ac.heading - (Math.atan2(ac.vel.x, -ac.vel.z) * 180) / Math.PI) % 360) + 540) % 360) - 180;
+  const leg = Math.max(1, Math.hypot(g.x - from.x, g.z - from.z));
+  const t = clamp(1 - (along - 350) / leg, 0, 1);
+  return { heading: (gateHdg - corr + drift + 720) % 360, altitude: from.y + (g.y - from.y) * t };
+}
+
+/**
+ * The autopilot flies a ring course from `start` (as the ring run places it: 47 m/s, 72 % power,
+ * gear up, flaps up), gate by gate, counting a gate passed when the aircraft crosses its plane
+ * inside the ring; `worst` is the furthest from a gate's centre it crossed (m).
+ */
+export function ringRun(model: FlightModel, gates: readonly RingGate[], start: { x: number; y: number; z: number; heading: number }, wind = { from: 40, speed: 4 }): { passed: number; missed: number; worst: number; seconds: number; minAgl: number; crashed: boolean; crashReason: string } {
+  const r = makeRig(model);
+  r.env.setWind(wind.from, wind.speed);
+  r.env.follow(start.x, start.z);
+  r.ac.reset(start.x, start.y, start.z, start.heading, 47);
+  r.ac.configure(false, 0);
+  Object.assign(r.inp, { throttle: 0.72, gearDown: false, flapNotch: 0 });
+  let next = 0;
+  let passed = 0;
+  let minAgl = Infinity;
+  let worst = 0;
+  const prev = r.ac.pos.clone();
+  const side = (g: RingGate, p: THREE.Vector3) => (p.x - g.x) * g.nx + (p.z - g.z) * g.nz;
+  let steps = 0;
+  for (const limit = Math.round((60 + gates.length * 40) / SIM_DT); next < gates.length && steps < limit && !r.ac.crashed; steps++) {
+    r.env.follow(r.ac.pos.x, r.ac.pos.z);
+    const t = r.ac.telemetry(r.env);
+    minAgl = Math.min(minAgl, t.agl);
+    const s = ringSteer(r.ac, next ? gates[next - 1] : start, gates[next]);
+    r.ap.update(r.ac, { ...s, speed: 46, maxBank: 45 }, t.ias, SIM_DT, r.inp);
+    r.ac.step(SIM_DT, r.inp, r.env);
+    const p = r.ac.pos;
+    const g = gates[next];
+    if (side(g, prev) < 0 && side(g, p) >= 0) {
+      const miss = Math.hypot(p.x - g.x, p.y - g.y, p.z - g.z);
+      worst = Math.max(worst, miss);
+      if (miss <= g.radius) passed++;
+      next++;
+    }
+    prev.copy(p);
+  }
+  const seconds = steps * SIM_DT;
+  return { passed, missed: next - passed, worst, seconds, minAgl, crashed: r.ac.crashed, crashReason: r.ac.crashReason };
+}

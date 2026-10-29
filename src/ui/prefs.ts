@@ -4,12 +4,15 @@ import type { StartPoint } from '../app.ts';
 import type { FlightModel } from '../sim/aircraft.ts';
 import type { QualityName } from '../render/quality.ts';
 import type { TimePreset } from '../world/celestial.ts';
+import type { CourseId } from '../game/course.ts';
 
 export type MenuMode = 'free' | 'rings' | 'landing';
 
 export interface Prefs {
   mode: MenuMode;
   start: StartPoint;
+  /** the ring run's circuit */
+  course: CourseId;
   time: TimePreset;
   model: FlightModel;
   quality: QualityName;
@@ -21,7 +24,7 @@ export interface Prefs {
   minimap: boolean;
 }
 
-const DEFAULTS: Prefs = { mode: 'free', start: 'runway', time: 'dusk', model: 'assisted', quality: 'medium', volume: 0.7, clouds: 0.45, windFrom: 40, windSpeed: 4, minimap: true };
+const DEFAULTS: Prefs = { mode: 'free', start: 'runway', course: 'fjord', time: 'dusk', model: 'assisted', quality: 'medium', volume: 0.7, clouds: 0.45, windFrom: 40, windSpeed: 4, minimap: true };
 const KEY = 'icarus.prefs.v1';
 
 function load(): Prefs {

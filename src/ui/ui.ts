@@ -6,15 +6,16 @@ import { TIME_PRESETS, type TimePreset } from '../world/celestial.ts';
 import type { ModeResult } from '../game/grading.ts';
 import { formatTime } from '../game/grading.ts';
 import { actionLabel, keyLabel, type Action } from '../input/controls.ts';
-import { buildCourse, coursePar } from '../game/course.ts';
+import { courseDef, type CourseId } from '../game/course.ts';
+import { CoursePane, parLabel } from './coursePane.ts';
 import { toggleFullscreen } from '../app.ts';
 import { prefs, savePrefs, type MenuMode, type Prefs } from './prefs.ts';
 import { PauseMap } from './pauseMap.ts';
 
-const MODE_INFO: Record<MenuMode, { t: string; d: () => string }> = {
+const MODE_INFO: Record<MenuMode, { t: string; d: (p: Prefs) => string }> = {
   free: { t: 'Free flight', d: () => 'No clock, no score. Start somewhere at random: on an airstrip, on the water, or in the air.' },
   landing: { t: 'Landing', d: () => 'A final approach to a random airstrip. Graded on the touchdown.' },
-  rings: { t: 'Ring run', d: () => `Fourteen gates down the fjord against the clock. Par ${formatTime(coursePar(buildCourse())).replace(/\.00$/, '')}.` },
+  rings: { t: 'Ring run', d: (p) => `Fourteen gates against the clock, on ${courseDef(p.course).name}. Par ${parLabel(p.course)}.` },
 };
 const MODEL_INFO: Record<FlightModel, string> = {
   arcade: 'Rate controls, protected stalls and speeds, forgiving touchdowns. Point and fly.',
@@ -67,6 +68,10 @@ export class UI {
   private readonly toasts: HTMLElement;
   private readonly caption: HTMLElement;
   private readonly pauseMap: PauseMap;
+  private readonly courses: CoursePane;
+  /** on a phone the circuits cover the menu: open from choosing Ring run until Back or a circuit */
+  private coursesOpen = false;
+  private readonly narrow = matchMedia('(max-width: 760px)');
   /** what the pause screen's left panel shows */
   private pauseTab: PauseTab = 'map';
 
@@ -93,6 +98,11 @@ export class UI {
               <span>Procedural · no assets</span>
             </div>
           </div>
+        </div>
+        <div class="course-pane glass hidden" data-courses role="region" aria-label="Ring run circuits">
+          <div class="pane-head"><button type="button" class="linkish back" data-act="courses-back">‹ Back</button><h3>Circuits</h3></div>
+          <div class="course-grid" data-course-grid></div>
+          <div class="seg-note" data-course-note></div>
         </div>
         <div class="controls-sheet glass hidden" data-sheet>
           <h3>Controls</h3>
@@ -164,6 +174,9 @@ export class UI {
     this.toasts = q('[data-toasts]');
     this.caption = q('.caption');
     this.pauseMap = new PauseMap(q('[data-pause-panel]'), app);
+    this.courses = new CoursePane(q('[data-courses]'), app);
+    this.narrow.addEventListener('change', () => this.syncCourses());
+    addEventListener('resize', () => this.courses.visible && this.courses.draw());
     if (matchMedia('(pointer: coarse)').matches) (q('[data-touch]') as HTMLElement).hidden = false;
     this.renderMenu();
     this.renderKeys();
@@ -196,7 +209,7 @@ export class UI {
     const p = this.prefs;
     const cards = this.root.querySelector('[data-group="mode"]') as HTMLElement;
     cards.innerHTML = (Object.keys(MODE_INFO) as MenuMode[])
-      .map((m) => `<button type="button" class="card ${m === p.mode ? 'on' : ''}" data-mode="${m}" aria-pressed="${m === p.mode}"><span class="t">${MODE_INFO[m].t}</span><span class="d">${MODE_INFO[m].d()}</span></button>`)
+      .map((m) => `<button type="button" class="card ${m === p.mode ? 'on' : ''}" data-mode="${m}" aria-pressed="${m === p.mode}"><span class="t">${MODE_INFO[m].t}</span><span class="d">${MODE_INFO[m].d(p)}</span></button>`)
       .join('');
     this.seg('start', [['runway', 'Airstrip'], ['water', 'On the water'], ['air', 'Airborne']], p.start);
     (this.root.querySelector('[data-group="start"]') as HTMLElement).style.display = p.mode === 'free' ? '' : 'none';
@@ -208,6 +221,17 @@ export class UI {
     (this.root.querySelector('[data-note="quality"]') as HTMLElement).textContent = QUALITY_INFO[p.quality];
     this.seg('pmodel', [['arcade', 'Arcade'], ['assisted', 'Assisted'], ['simulation', 'Sim']], p.model);
     this.seg('pquality', [['low', 'Low'], ['medium', 'Med'], ['high', 'High']], p.quality);
+    this.courses.select(p.course);
+    this.syncCourses();
+  }
+
+  /**
+   * The circuits show beside the menu while Ring run is chosen (not over the controls sheet); on a
+   * phone, where they cover the menu, only once Ring run has been picked, until Back or a circuit.
+   */
+  private syncCourses(): void {
+    const on = this.isMenuOpen() && this.prefs.mode === 'rings' && this.controlsSheet.classList.contains('hidden') && (!this.narrow.matches || this.coursesOpen);
+    if (on !== this.courses.visible) this.courses.show(on);
   }
 
   /** The key list, in the menu's controls sheet and on the pause screen. */
@@ -277,7 +301,7 @@ export class UI {
   showPause(tab: PauseTab = 'map'): void {
     this.hideAll();
     const s = this.app.session;
-    const title = this.app.sessionKind === 'rings' ? 'Ring run' : this.app.sessionKind === 'landing' ? 'Landing' : 'Free flight';
+    const title = this.app.sessionKind === 'rings' ? `Ring run · ${courseDef(this.app.course).name}` : this.app.sessionKind === 'landing' ? 'Landing' : 'Free flight';
     (this.root.querySelector('[data-pause-sub]') as HTMLElement).textContent = `${title} · ${formatTime(this.app.simTime).replace(/\.\d+$/, '')} in the air`;
     void s;
     this.syncSliders();
@@ -312,7 +336,7 @@ export class UI {
 
   /** I outside a flight: on the pause screen it shows the controls, or flies on if they already show; in the menu it opens or closes the sheet. */
   toggleControls(): void {
-    if (this.isMenuOpen()) this.controlsSheet.classList.toggle('hidden');
+    if (this.isMenuOpen()) this.toggleSheet();
     else if (!this.pause.classList.contains('hidden')) {
       if (this.pauseTab === 'controls') this.app.resume();
       else {
@@ -351,7 +375,15 @@ export class UI {
   hideAll(): void {
     for (const s of [this.menu, this.pause, this.results]) s.classList.add('hidden');
     this.controlsSheet.classList.add('hidden');
+    this.coursesOpen = false;
+    this.courses.show(false);
     this.pauseMap.hide();
+  }
+
+  /** The menu's controls sheet, in place of the circuits while it is open. */
+  private toggleSheet(on = this.controlsSheet.classList.contains('hidden')): void {
+    this.controlsSheet.classList.toggle('hidden', !on);
+    this.syncCourses();
   }
 
   // ---------------------------------------------------------------- toasts
@@ -369,8 +401,13 @@ export class UI {
 
   private choose(group: string, value: string): void {
     const p = this.prefs;
-    if (group === 'mode') p.mode = value as MenuMode;
-    else if (group === 'start') p.start = value as StartPoint;
+    if (group === 'mode') {
+      p.mode = value as MenuMode;
+      this.coursesOpen = p.mode === 'rings';
+    } else if (group === 'course') {
+      p.course = value as CourseId;
+      this.coursesOpen = false;
+    } else if (group === 'start') p.start = value as StartPoint;
     else if (group === 'time') {
       p.time = value as TimePreset;
       this.app.settings.timeOfDay = TIME_PRESETS[p.time];
@@ -397,7 +434,7 @@ export class UI {
       this.setPauseTab(btn.dataset.tab as PauseTab);
       return;
     }
-    for (const g of ['mode', 'start', 'time', 'model', 'quality', 'pmodel', 'pquality']) {
+    for (const g of ['mode', 'course', 'start', 'time', 'model', 'quality', 'pmodel', 'pquality']) {
       const v = btn.dataset[g];
       if (v !== undefined) {
         this.app.audio.start();
@@ -411,7 +448,11 @@ export class UI {
     this.app.audio.start();
     this.app.audio.click();
     if (act === 'fly') this.fly();
-    else if (act === 'controls') this.controlsSheet.classList.toggle('hidden');
+    else if (act === 'controls') this.toggleSheet();
+    else if (act === 'courses-back') {
+      this.coursesOpen = false;
+      this.syncCourses();
+    }
     else if (act === 'resume') this.app.resume();
     else if (act === 'restart' || act === 'retry') this.app.restartSession();
     else if (act === 'menu') this.app.enterMenu();
@@ -424,7 +465,7 @@ export class UI {
     this.app.settings.timeOfDay = TIME_PRESETS[p.time];
     this.app.settings.model = p.model;
     this.app.applySettings();
-    this.app.startSession(p.mode, p.start);
+    this.app.startSession(p.mode, p.start, { course: p.course });
   }
 
   private onKey(e: KeyboardEvent): void {
@@ -440,7 +481,10 @@ export class UI {
     } else if (e.code === 'Escape' && !this.results.classList.contains('hidden')) {
       this.app.enterMenu();
     } else if (e.code === 'Escape' && !this.controlsSheet.classList.contains('hidden')) {
-      this.controlsSheet.classList.add('hidden');
+      this.toggleSheet(false);
+    } else if (e.code === 'Escape' && this.coursesOpen && this.narrow.matches) {
+      this.coursesOpen = false;
+      this.syncCourses();
     }
   }
 }

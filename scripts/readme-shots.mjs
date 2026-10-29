@@ -120,7 +120,7 @@ await save('cockpit');
 await ev(() => {
   const api = window.__icarus;
   api.setTime(15.2);
-  api.session.start('rings', 'air');
+  api.session.start('rings', 'air', undefined, 'home');
   api.setCameraMode('chase');
   window.app.hudVisible = true;
   api.session.autoRings(0);

@@ -36,7 +36,7 @@ not part of this repository.
 - URL flags: `?q=low|medium|high`, `?t=dawn|day|golden|dusk|night|<hours>`, `?mode=free|rings|landing`
   with `&start=runway|water|air` (skips the menu; `&strip=coastal|mountain|north|east|south` picks the
   strip, `&water=x,z,heading` the spot on the water and `&air=x,y,z,heading` the one in the air, else
-  they are random),
+  they are random; `&course=fjord|summits` the ring run's circuit, else Fjordruta),
   `?model=arcade|assisted|simulation`, `?noui`, `?nohud`, `?debug` (test API on `window.__icarus`),
   `?cam=x,y,z,yaw,pitch`, `?force=nowebgl2|nofloat|logdepth|noatlas`.
 - Preferences (mode, start, time, model, quality, sliders, map on/off) persist in `localStorage`.
@@ -93,7 +93,16 @@ Menu: Enter flies; Esc on the results card goes back to the menu.
   the path: Vatne from 3 km, Hjelle from 2.2 km (past a ridge 2.6 km out). Graded on sink rate,
   centreline, touchdown point (from the aim point), wings level and stopping on the strip. A crash or
   overrun is an F.
-- Ring run: 14 gates down the fjord against the clock (par 4:26); a missed gate costs 5 s. Graded on time.
+- Ring run: 14 gates against the clock on one of two circuits, picked in a pane beside the menu (on a
+  phone it covers the menu, with a Back button), each tile a chart of its course. A missed gate costs
+  5 s. Graded on time against the circuit's par.
+  - Fjordruta (par 4:26): down the main fjord and into the north arm, 70–150 m over the water.
+  - Tinderunden (par 5:15): clockwise round the highest summit (1530 m) at 800–1190 m: up from the
+    main fjord into the high basin south of it, through the pass between it and the south-west ridge,
+    along its west wall above the north arm, into the valley behind it, and back south through the
+    saddle north-east of it. Placed by hand, each gate as low as the ground under it and the legs to it
+    allow, at least 30 m above the ground along every straight leg, and no leg climbing more than 7 %
+    (the aircraft climbs at about 11 %). Below the clouds (base 1550 m).
 - Arcade: rate-command attitude, protected stall. Assisted: real aerodynamics with auto-trim, turn
   coordination, wing leveller and stall protection. Simulation: raw aerodynamics with no protections
   (propeller torque, P-factor and adverse yaw are left for the pilot).
@@ -190,7 +199,8 @@ grow on a strip, within 35 m of it or 250 m past its ends.
   - autoland, then rest after rollout
   - lowest contact point never more than the tyre compression (≤ 0.16 m) below the drawn surface
 - Modes:
-  - autopilot ring run 14/14 (B, 5:19.8)
+  - autopilot ring runs 14/14: Fjordruta (B, 5:18.1), Tinderunden (A, 5:38.2); in the unit tests the
+    autopilot also flies both clean with each flight model, in 4 and 10 m/s winds
   - a run 45 m wide of every gate is penalised (C)
   - autopilot landings on the mountain strip (A, 84) and on Hjelle from its short final (A, 81)
   - landing flown into the ground (F, gear collapsed)

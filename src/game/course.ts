@@ -1,5 +1,9 @@
-// Ring course: 14 gates down the main fjord and into the north arm. Generated from the fjord
-// polylines, recentred on the actual water in each cross-section, then validated for clearance.
+// The ring-run circuits, 14 gates each. Fjordruta runs down the main fjord and into the north arm,
+// generated from the fjord polylines and recentred on the actual water in each cross-section.
+// Tinderunden goes round the highest summit (1530 m) at 800–1190 m, through the pass and the saddle
+// between it and the ridges around it: placed by hand, each gate as low as the ground under it and
+// the legs to it allow, and no leg climbing more than 7 % (the aircraft climbs at about 11 %).
+// tests/game.test.ts checks both for clearance and flies them with the autopilot.
 import { FJORDS, SEA_LEVEL } from '../world/params.ts';
 import { terrainHeight } from '../world/terrain.ts';
 
@@ -60,10 +64,63 @@ export function waterSection(x: number, z: number, nx: number, nz: number): { cx
   return { cx: x + nx * mid, cz: z + nz * mid, width: hi - lo };
 }
 
-let cached: Gate[] | null = null;
+export type CourseId = 'fjord' | 'summits';
 
-export function buildCourse(): Gate[] {
-  if (cached) return cached;
+export interface CourseDef {
+  id: CourseId;
+  name: string;
+  /** one line for the menu */
+  blurb: string;
+}
+
+export const COURSES: readonly CourseDef[] = [
+  { id: 'fjord', name: 'Fjordruta', blurb: 'Down the fjord and into the north arm, low over the water.' },
+  { id: 'summits', name: 'Tinderunden', blurb: 'Round the highest summit, through its passes, a thousand metres up.' },
+];
+
+export function courseDef(id: CourseId): CourseDef {
+  return COURSES.find((c) => c.id === id) ?? COURSES[0];
+}
+
+/**
+ * Tinderunden's gates (x, height, z), clockwise round the summit: up from the main fjord into the high
+ * basin south of it, through the pass between it and the south-west ridge, north along its west wall
+ * above the north arm, across the arm into the valley behind it, and back south through the saddle
+ * north-east of it into the basin.
+ */
+const SUMMIT_GATES: readonly [number, number, number][] = [
+  [13300, 1075, -400], [12800, 1165, -1600], [12250, 1040, -2900], [11600, 980, -3900], [11500, 875, -5100],
+  [12300, 805, -6300], [13400, 895, -7000], [14500, 975, -7000], [15500, 985, -6500], [15700, 1055, -5500],
+  [15200, 1135, -4500], [15200, 1185, -3300], [14400, 1075, -2400], [14500, 975, -1300],
+];
+
+/** Gates through the points (x, y, z), each facing along the line from the gate before it to the one after. */
+function gatesThrough(pts: readonly (readonly [number, number, number])[]): Gate[] {
+  return pts.map(([x, y, z], i) => {
+    const a = pts[Math.max(0, i - 1)];
+    const b = pts[Math.min(pts.length - 1, i + 1)];
+    const dx = b[0] - a[0];
+    const dz = b[2] - a[2];
+    const l = Math.hypot(dx, dz) || 1;
+    return { x, y, z, nx: dx / l, nz: dz / l, radius: GATE_RADIUS };
+  });
+}
+
+const cached = new Map<CourseId, Gate[]>();
+
+export function buildCourse(id: CourseId = 'fjord'): Gate[] {
+  let gates = cached.get(id);
+  if (!gates) cached.set(id, (gates = id === 'summits' ? gatesThrough(SUMMIT_GATES) : fjordGates()));
+  return gates;
+}
+
+/** Where a run starts: 1500 m short of the first gate, 10 m above it, flying through it. */
+export function courseStart(gates: readonly Gate[]): { x: number; y: number; z: number; heading: number } {
+  const g = gates[0];
+  return { x: g.x - g.nx * 1500, y: g.y + 10, z: g.z - g.nz * 1500, heading: ((Math.atan2(g.nx, -g.nz) * 180) / Math.PI + 360) % 360 };
+}
+
+function fjordGates(): Gate[] {
   const pts = pathPoints();
   const start = 500;
   const spacing = 950;
@@ -76,16 +133,7 @@ export function buildCourse(): Gate[] {
     const off = side * Math.min(0.2 * w.width, 170);
     raw.push({ x: w.cx - p.tz * off, z: w.cz + p.tx * off, width: w.width });
   }
-  const gates: Gate[] = raw.map((g, i) => {
-    const a = raw[Math.max(0, i - 1)];
-    const b = raw[Math.min(GATE_COUNT - 1, i + 1)];
-    const dx = b.x - a.x;
-    const dz = b.z - a.z;
-    const l = Math.hypot(dx, dz) || 1;
-    return { x: g.x, y: SEA_LEVEL + HEIGHTS[i], z: g.z, nx: dx / l, nz: dz / l, radius: GATE_RADIUS };
-  });
-  cached = gates;
-  return gates;
+  return gatesThrough(raw.map((g, i) => [g.x, SEA_LEVEL + HEIGHTS[i], g.z] as const));
 }
 
 /** Smallest clearance of the gate rings and of the straight legs between gates above terrain/water. */

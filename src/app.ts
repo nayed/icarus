@@ -23,6 +23,7 @@ import { WATER_HOME, pickWaterStart, waterAt, type WaterStart } from './world/wa
 import { AIR_HOME, AIR_SPEED, pickAirStart, type AirStart } from './world/airStart.ts';
 import { createMode, type GameMode, type ModeKind } from './game/modes.ts';
 import { Track } from './game/track.ts';
+import { COURSES, type CourseId } from './game/course.ts';
 import type { ModeResult } from './game/grading.ts';
 import { Hud } from './ui/hud.ts';
 import { prefs, savePrefs } from './ui/prefs.ts';
@@ -105,6 +106,8 @@ export class App {
   sessionStart: StartPoint = 'runway';
   /** the strip a free flight from a strip starts on, or a landing lands on (index into STRIPS): a new session picks one at random */
   startStrip = 0;
+  /** the ring run's circuit */
+  course: CourseId = 'fjord';
   /** the spot 'water' starts use (WATER_HOME until one is drawn): a new free flight draws one at random */
   waterStart: WaterStart | null = null;
   /** the same for 'air' starts (AIR_HOME until one is drawn) */
@@ -193,7 +196,8 @@ export class App {
     const water = [x, z, heading].every(Number.isFinite) ? { x, z, heading, water: waterAt(x, z) } : undefined;
     const a = (q.get('air') ?? '').split(',').map(Number);
     const air = a.length === 4 && a.every(Number.isFinite) ? { x: a[0], y: a[1], z: a[2], heading: a[3] } : undefined;
-    if (q.has('mode') || q.has('start') || !ui) this.startSession((q.get('mode') as ModeKind) ?? 'free', (q.get('start') as StartPoint) ?? 'runway', { strip: strip >= 0 ? strip : undefined, water, air });
+    const course = COURSES.find((c) => c.id === q.get('course'))?.id;
+    if (q.has('mode') || q.has('start') || !ui) this.startSession((q.get('mode') as ModeKind) ?? 'free', (q.get('start') as StartPoint) ?? 'runway', { strip: strip >= 0 ? strip : undefined, water, air, course });
     else this.enterMenu();
     requestAnimationFrame(this.loop);
   }
@@ -274,9 +278,10 @@ export class App {
    * Starts (or restarts) a game mode. A free flight from a strip and a landing pick a strip at random,
    * a different one each time; a free flight on the water a spot in a different water, facing into the
    * wind; one in the air a spot well away from the last. A restart (`again`) keeps the strip or the
-   * spot, and `strip`, `water` or `air` chooses it.
+   * spot, and `strip`, `water` or `air` chooses it. A ring run flies `course`, or the last one.
    */
-  startSession(kind: ModeKind, start: StartPoint = this.sessionStart, opts: { strip?: number; water?: WaterStart; air?: AirStart; again?: boolean } = {}): void {
+  startSession(kind: ModeKind, start: StartPoint = this.sessionStart, opts: { strip?: number; water?: WaterStart; air?: AirStart; course?: CourseId; again?: boolean } = {}): void {
+    if (opts.course) this.course = opts.course;
     if ((kind === 'free' && start === 'runway') || kind === 'landing') {
       if (opts.strip !== undefined) this.startStrip = opts.strip;
       else if (!opts.again) this.startStrip = (this.startStrip + 1 + Math.floor(Math.random() * (STRIPS.length - 1))) % STRIPS.length;

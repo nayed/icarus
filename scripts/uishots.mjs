@@ -5,6 +5,13 @@ let failures = 0;
 const check = (c, m) => { console.log(`  ${c ? '✓' : '✗'} ${m}`); if (!c) failures++; };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const all = [];
+// the ring run's circuits pane
+const pane = (page) => page.evaluate(() => ({
+  on: !document.querySelector('[data-courses]').classList.contains('hidden'),
+  tiles: document.querySelectorAll('.course-card').length,
+  sel: document.querySelector('.course-card.on')?.dataset.course,
+  card: document.querySelector('.card[data-mode="rings"] .d').textContent,
+}));
 for (const [w, h, tag] of [[1920, 1080, 'desktop'], [390, 844, 'phone']]) {
   const { browser, page, problems } = await launch({ width: w, height: h });
   all.push(problems);
@@ -39,12 +46,27 @@ for (const [w, h, tag] of [[1920, 1080, 'desktop'], [390, 844, 'phone']]) {
     await sleep(300);
     check(iOpen && !(await sheetOpen()), 'I opens and closes the controls sheet in the menu');
     await page.click('.card[data-mode="rings"]');
+    await sleep(500);
+    let cp = await pane(page);
+    check(cp.on && cp.tiles === 2 && cp.sel === 'fjord', `choosing Ring run shows the circuits beside the menu (${JSON.stringify(cp)})`);
+    await page.click('.course-card[data-course="summits"]');
+    await sleep(400);
+    cp = await pane(page);
+    check(cp.on && cp.sel === 'summits' && cp.card.includes('Tinderunden'), `a tile selects its circuit, and the pane stays (${JSON.stringify(cp)})`);
+    await page.click('text=Controls');
+    await sleep(300);
+    const underSheet = (await pane(page)).on;
+    await page.click('text=Controls');
+    await sleep(400);
+    check(!underSheet && (await pane(page)).on, 'the controls sheet takes the circuits\' place while it is open');
+    await shot(page, `ui-${tag}-circuits`);
     await page.click('[data-time="night"]');
     await sleep(2500);
     await shot(page, `ui-${tag}-menu-night`);
     await page.keyboard.press('Enter');
     await sleep(800);
-    check((await page.evaluate(() => window.__icarus.session.state())) === 'flying', 'Enter starts the selected mode');
+    const started = await page.evaluate(() => ({ state: window.__icarus.session.state(), course: window.__icarus.session.course(), title: window.__icarus.session.hud()?.title }));
+    check(started.state === 'flying' && started.course === 'summits' && started.title === 'Ring run · Tinderunden', `Enter starts the selected mode on the selected circuit (${JSON.stringify(started)})`);
     await page.keyboard.down('KeyR'); await sleep(600); await page.keyboard.up('KeyR');
     await sleep(2500);
     await shot(page, `ui-${tag}-hud-rings`);
@@ -126,6 +148,21 @@ for (const [w, h, tag] of [[1920, 1080, 'desktop'], [390, 844, 'phone']]) {
     await page.evaluate(() => document.querySelector('.menu-body').scrollTop = 400);
     await sleep(300);
     await shot(page, `ui-${tag}-menu-scrolled`);
+    // the circuits cover the menu on a phone: open from Ring run, closed by Back or by a circuit
+    await page.click('.card[data-mode="rings"]');
+    await sleep(500);
+    let cp = await pane(page);
+    check(cp.on && cp.tiles === 2, `phone: Ring run opens the circuits over the menu (${JSON.stringify(cp)})`);
+    await shot(page, `ui-${tag}-circuits`);
+    await page.click('[data-act="courses-back"]');
+    await sleep(500);
+    check(!(await pane(page)).on, 'phone: Back returns to the menu');
+    await page.click('.card[data-mode="rings"]');
+    await sleep(400);
+    await page.click('.course-card[data-course="summits"]');
+    await sleep(500);
+    cp = await pane(page);
+    check(!cp.on && cp.sel === 'summits' && cp.card.includes('Tinderunden'), `phone: a circuit selects it and returns to the menu (${JSON.stringify(cp)})`);
   }
   await browser.close();
 }

@@ -1,7 +1,7 @@
 // Game modes: free flight, the fjord ring run and the graded landing.
 import * as THREE from 'three';
 import type { App, StartPoint } from '../app.ts';
-import { buildCourse, coursePar, type Gate } from './course.ts';
+import { buildCourse, courseDef, coursePar, courseStart, type Gate } from './course.ts';
 import { gradeLanding, gradeRings, formatTime, type ModeResult } from './grading.ts';
 import type { Touchdown, PilotInput } from '../sim/aircraft.ts';
 import { Autopilot } from '../sim/autopilot.ts';
@@ -158,7 +158,8 @@ void main() {
 
 export class RingRun extends GameMode {
   readonly kind = 'rings' as const;
-  readonly gates: Gate[] = buildCourse();
+  readonly course = courseDef(this.app.course);
+  readonly gates: Gate[] = buildCourse(this.course.id);
   readonly par = coursePar(this.gates);
   readonly penalty = 5;
   next = 0;
@@ -175,11 +176,9 @@ export class RingRun extends GameMode {
   private fade: number[] = [];
 
   begin(): void {
-    const g0 = this.gates[0];
     const ac = this.app.ac;
-    const back = 1500;
-    const hdg = (Math.atan2(g0.nx, -g0.nz) * 180) / Math.PI;
-    ac.reset(g0.x - g0.nx * back, g0.y + 10, g0.z - g0.nz * back, hdg, 47);
+    const s = courseStart(this.gates);
+    ac.reset(s.x, s.y, s.z, s.heading, 47);
     this.app.controls.reset(0.72, false, 0);
     this.app.startFlightAt();
     this.prev.copy(ac.pos);
@@ -288,6 +287,7 @@ export class RingRun extends GameMode {
   private finish(crashed: boolean): void {
     const time = crashed ? this.app.simTime - Math.max(this.startTime, 0) : this.finishTime - this.startTime;
     this.result = gradeRings({
+      course: this.course.name,
       time,
       missed: this.missed + (crashed ? this.gates.length - this.next : 0),
       penaltyPerMiss: this.penalty,
@@ -320,7 +320,7 @@ export class RingRun extends GameMode {
     const now = this.app.simTime;
     const elapsed = this.startTime < 0 ? 0 : (this.finishTime > 0 ? this.finishTime : now) - this.startTime;
     const h: ModeHud = {
-      title: 'Ring run',
+      title: `Ring run · ${this.course.name}`,
       timer: formatTime(elapsed + this.missed * this.penalty),
       timerSub: `Gate ${Math.min(this.next + 1, this.gates.length)} / ${this.gates.length}${this.missed ? ` · ${this.missed} missed` : ''}`,
       map: { gates: this.gates, gateStates: this.states },

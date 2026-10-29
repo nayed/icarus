@@ -1,4 +1,4 @@
-// Game modes end to end: ring run (clean and corner-cutting), landing on the mountain strip (good and hard) and on
+// Game modes end to end: ring run (clean on both circuits, and corner-cutting), landing on the mountain strip (good and hard) and on
 // Hjelle, free-flight crash, free flight from a random airstrip, from a random spot on the water and from one in
 // the air, landings on a random strip.
 import { startServer, launch, waitFrames, shot, report } from './harness.mjs';
@@ -40,6 +40,19 @@ let r = await waitResult(240000, async () => {
 });
 check(r && r.success && r.metrics[1].value === '14 / 14', `clean run: ${r ? `${r.grade} ${r.headline} (${r.subtitle}) — ${metrics(r)}` : 'no result'}`);
 check((await page.evaluate(() => window.__icarus.session.state())) === 'results', 'app switched to the results state');
+
+console.log('\n== ring run on Tinderunden, round the summit, autopilot');
+await open('rings', '&course=summits');
+hud = await page.evaluate(() => window.__icarus.session.hud());
+check(hud?.title === 'Ring run · Tinderunden' && hud.map?.gates?.length === 14 && hud.map.gates[0].y > 1000, `HUD: ${hud?.title}, first gate at ${hud?.map?.gates?.[0]?.y} m`);
+await page.evaluate(() => window.__icarus.session.autoRings(0));
+shots = 0;
+r = await waitResult(240000, async () => {
+  const h = await page.evaluate(() => window.__icarus.session.hud());
+  if (shots === 0 && h.timerSub?.startsWith('Gate 4')) { shots++; await shot(page, 'mode-summits-chase'); await page.evaluate(() => window.__icarus.setCameraMode('cinematic')); }
+  else if (shots === 1 && h.timerSub?.startsWith('Gate 11')) { shots++; await shot(page, 'mode-summits-cinematic'); }
+});
+check(r && r.success && r.title === 'Tinderunden' && r.metrics[1].value === '14 / 14', `clean run: ${r ? `${r.title} ${r.grade} ${r.headline} (${r.subtitle}) — ${metrics(r)}` : 'no result'}`);
 
 console.log('\n== ring run, cutting 45 m wide of every gate');
 await open('rings');

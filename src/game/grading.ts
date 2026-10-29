@@ -112,6 +112,8 @@ export function gradeLanding(l: LandingInput): ModeResult {
 }
 
 export interface RingsInput {
+  /** the circuit's name (the result card's title) */
+  course: string;
   /** elapsed time from the first gate to the last (s) */
   time: number;
   missed: number;
@@ -137,7 +139,7 @@ export function gradeRings(r: RingsInput): ModeResult {
   const passed = r.gates - r.missed;
   return {
     mode: 'rings',
-    title: 'Fjord ring run',
+    title: r.course,
     grade,
     headline: r.crashed ? 'DNF' : formatTime(total),
     subtitle: r.crashed ? r.crashReason : r.missed === 0 ? 'Clean run' : `${r.missed} gate${r.missed > 1 ? 's' : ''} missed (+${r.missed * r.penaltyPerMiss} s)`,

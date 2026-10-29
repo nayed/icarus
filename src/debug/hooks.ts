@@ -15,6 +15,7 @@ import { SIM_DT } from '../sim/scenarios.ts';
 import { Autopilot } from '../sim/autopilot.ts';
 import { WATER_HOME, waterAt } from '../world/waterStart.ts';
 import { AIR_HOME } from '../world/airStart.ts';
+import { COURSES, type CourseId } from '../game/course.ts';
 
 export interface ParityStats {
   count: number;
@@ -60,9 +61,10 @@ export function installDebugHooks(app: App): void {
        * `where` picks a free flight's start or a landing's strip: a strip (its id), a spot on the water
        * ({ x, z, heading }) or in the air ({ x, y, z, heading }), or 'home', the classic one (the coastal
        * strip, the main fjord off it, the sea off its mouth; the mountain strip for a landing:
-       * repeatable screenshots and timings); without it, one at random.
+       * repeatable screenshots and timings); without it, one at random. For a ring run it is the
+       * circuit ('home': the fjord one; without it, the last one flown).
        */
-      start(kind: 'free' | 'rings' | 'landing', start: StartPoint = 'runway', model?: FlightModel, where?: StripDef['id'] | 'home' | { x: number; y?: number; z: number; heading: number }) {
+      start(kind: 'free' | 'rings' | 'landing', start: StartPoint = 'runway', model?: FlightModel, where?: StripDef['id'] | CourseId | 'home' | { x: number; y?: number; z: number; heading: number }) {
         if (model) {
           app.settings.model = model;
           app.applySettings();
@@ -72,8 +74,11 @@ export function installDebugHooks(app: App): void {
         const spot = typeof where === 'object' ? where : undefined;
         const water = start !== 'water' ? undefined : home ? WATER_HOME : spot && { x: spot.x, z: spot.z, heading: spot.heading, water: waterAt(spot.x, spot.z) };
         const air = start !== 'air' ? undefined : home ? AIR_HOME : spot && { x: spot.x, y: spot.y ?? AIR_HOME.y, z: spot.z, heading: spot.heading };
-        app.startSession(kind, start, { strip: i >= 0 ? i : undefined, water, air });
+        const course = home ? 'fjord' : COURSES.find((c) => c.id === where)?.id;
+        app.startSession(kind, start, { strip: i >= 0 ? i : undefined, water, air, course });
       },
+      /** The ring run's circuit (id). */
+      course: () => app.course,
       /** The strip a free flight from a strip or a landing uses (id). */
       startStrip: () => STRIPS[app.startStrip].id,
       /** The spot a free flight on the water uses, and its water (an index into FJORDS, or -1 for the coast). */
@@ -86,24 +91,15 @@ export function installDebugHooks(app: App): void {
       gates: () => (app.session && 'gates' in app.session ? (app.session as unknown as { gates: unknown[] }).gates : null),
       /** Fly the ring course with the autopilot (input override), gate by gate. */
       autoRings(cutCorner = 0) {
-        const mode = app.session as unknown as { gates: { x: number; y: number; z: number; nx: number; nz: number }[]; next: number };
+        const mode = app.session as unknown as { gates: scenarios.RingGate[]; next: number };
+        const start = { x: app.ac.pos.x, y: app.ac.pos.y, z: app.ac.pos.z };
         const ap = new Autopilot();
         const inp = { ...app.controls.input, gearDown: false, flapNotch: 0 };
         app.inputOverride = inp;
         const hook = () => {
-          const g = mode.gates[Math.min(mode.next, mode.gates.length - 1)];
-          // line following onto the gate's axis (offset sideways by cutCorner to test misses)
-          const cx = g.x - g.nz * cutCorner;
-          const cz = g.z + g.nx * cutCorner;
-          const rx = app.ac.pos.x - cx;
-          const rz = app.ac.pos.z - cz;
-          const along = -(rx * g.nx + rz * g.nz);
-          const cross = rx * -g.nz + rz * g.nx; // + right of the line
-          const look = Math.max(140, along * 0.35);
-          const gateHdg = (Math.atan2(g.nx, -g.nz) * 180) / Math.PI;
-          const corr = THREE.MathUtils.clamp((Math.atan2(cross, look) * 180) / Math.PI, -65, 65);
-          const hdg = (gateHdg - corr + 720) % 360;
-          ap.update(app.ac, { heading: hdg, altitude: g.y, speed: 46, maxBank: 45 }, app.telemetry.ias, SIM_DT, inp);
+          const n = Math.min(mode.next, mode.gates.length - 1);
+          const s = scenarios.ringSteer(app.ac, n ? mode.gates[n - 1] : start, mode.gates[n], cutCorner);
+          ap.update(app.ac, { ...s, speed: 46, maxBank: 45 }, app.telemetry.ias, SIM_DT, inp);
         };
         app.onSimStep.push(hook);
         return true;

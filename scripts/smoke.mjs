@@ -33,7 +33,7 @@ for (const force of ['', 'nofloat', 'logdepth']) {
     check(await page.evaluate(() => window.app.rig.mode === 'cockpit'), 'cockpit view renders');
     await page.evaluate(() => window.__icarus.session.start('rings', 'air'));
     await waitFrames(page, 10, T);
-    check(await page.evaluate(() => window.__icarus.session.hud()?.title === 'Ring run'), 'ring run renders');
+    check(await page.evaluate(() => window.__icarus.session.hud()?.title.startsWith('Ring run')), 'ring run renders');
     check(await page.evaluate(() => !!window.app.hud.mapBox), 'minimap drawn');
     await page.keyboard.press('KeyP');
     await waitFrames(page, 2, T);
