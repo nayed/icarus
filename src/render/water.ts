@@ -118,6 +118,7 @@ void main() {
   vec2 grad = vec2(0.0);
   // slope variance of ripples too small to resolve becomes roughness (keeps distant water from looking glassy)
   float lost = 0.0;
+  vec2 bend = footA < 4.2 ? vec2(vnoise(P.xz * (1.0 / 17.0), 920u), vnoise(P.xz * (1.0 / 6.0) + 3.3, 921u)) : vec2(0.0);
   for (int i = 0; i < 7; i++) {
     float fi = float(i);
     float lam = 7.0 * pow(0.7, fi);
@@ -129,7 +130,9 @@ void main() {
     float ang = wa + (h1 - 0.5) * 2.4;
     vec2 dir = vec2(cos(ang), sin(ang));
     float k = 6.28318 / lam;
-    float ph = k * dot(dir, P.xz) - sqrt(9.81 * k) * uTime + h2 * 6.28318;
+    // bent crests: straight parallel trains read as hatching
+    float ph = k * dot(dir, P.xz) - sqrt(9.81 * k) * uTime + h2 * 6.28318
+      + (i % 2 == 0 ? bend.x : bend.y) * (1.6 + 0.35 * fi);
     grad += dir * cos(ph) * slope * fade * (0.6 + 0.8 * h2);
   }
   N = normalize(N + vec3(-grad.x, 0.0, -grad.y));

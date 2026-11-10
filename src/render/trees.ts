@@ -19,6 +19,7 @@ out vec3 vWorld;
 out vec3 vNormal;
 out vec3 vAlbedo;
 out float vAO;
+out float vLeaf;
 #include <logdepthbuf_pars_vertex>
 float profile(float t, float birch) {
   // canopy radius (relative to height): pine = 4 stacked tiers, birch = lumpy ovoid
@@ -68,6 +69,7 @@ void main() {
   vWorld = world;
   vNormal = n;
   vAO = mix(0.45, 1.0, clamp(p.y / H, 0.0, 1.0));
+  vLeaf = aShape.z > 0.5 ? 0.0 : mix(0.7, 1.0, birch);
   if (aShape.z > 0.5) {
     vAlbedo = birch > 0.5 ? vec3(0.42, 0.4, 0.37) : vec3(0.06, 0.04, 0.025);
   } else {
@@ -87,21 +89,37 @@ in vec3 vWorld;
 in vec3 vNormal;
 in vec3 vAlbedo;
 in float vAO;
+in float vLeaf;
 out vec4 fragColor;
 #include <logdepthbuf_pars_fragment>
 void main() {
   #include <logdepthbuf_fragment>
   vec3 N = normalize(vNormal);
-  float tsh = terrainShadow(vWorld) * planeShadow(vWorld);
+  // foliage: clumps of leaves or needles break up the smooth cone, where a pixel resolves them
+  float foot = length(vWorld - uCamPosF) * uPixelAngle;
+  float lf = vLeaf * (1.0 - smoothstep(0.15, 0.5, foot / 0.45));
+  vec3 albedo = vAlbedo;
+  float ao = vAO;
+  if (lf > 0.0) {
+    vec3 q = vWorld * 1.15;
+    float a = 1.3 * vnoise(q.xz + q.y * vec2(0.7, -0.9), 801u);
+    float b = 1.3 * vnoise(q.zy * 1.9 + q.x * vec2(-0.6, 0.8), 802u);
+    N = normalize(N + vec3(a, 0.6 * (a - b), b) * 0.3 * lf);
+    float clump = (a + b) * 0.67;
+    albedo *= 1.0 + 0.35 * clump * lf;
+    ao *= 1.0 - 0.4 * lf * smoothstep(0.1, -0.7, clump);
+  }
+  vec2 tl = terrainLight(vWorld);
+  float tsh = tl.x * planeShadow(vWorld);
   float shSun = mix(1.0, tsh, uKeyIsSun) * cloudShadowAt(vWorld, uSunDir);
   float shMoon = mix(tsh, 1.0, uKeyIsSun) * cloudShadowAt(vWorld, uMoonDir);
   float ws = (dot(N, uSunDir) + 0.35) / 1.35;
   float wm = (dot(N, uMoonDir) + 0.35) / 1.35;
-  vec3 direct = (uSunColor * max(ws, 0.0) * shSun + uMoonColor * max(wm, 0.0) * shMoon) / PI;
+  vec3 direct = (uSunColor * max(ws, 0.0) * shSun + uMoonColor * max(wm, 0.0) * shMoon) / PI * mix(1.0, ao / max(vAO, 0.01), 0.7);
   // forward scattering through foliage
   float back = pow(max(dot(normalize(vWorld - uCamPosF), uSunDir), 0.0), 6.0) * 0.6;
-  vec3 amb = envDiffuse(N) * vAO;
-  vec3 col = vAlbedo * (direct * (1.0 + back) + amb + lampLight(vWorld, N) / PI);
+  vec3 amb = envDiffuse(N) * ao * skyOcclusion(tl.y);
+  vec3 col = albedo * (direct * (1.0 + back) + amb + lampLight(vWorld, N) / PI);
   fragColor = finalOutput(applyFog(col, uCamPosF, vWorld));
 }
 `;

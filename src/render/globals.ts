@@ -130,15 +130,18 @@ vec3 applyFog(vec3 col, vec3 cam, vec3 P) {
   return col * T + sky * (1.0 - T);
 }
 
-/** Soft terrain shadow from the shadow map (1 = lit). */
-float terrainShadow(vec3 P) {
-  if (uShadowOrigin.z <= 1.0) return 1.0;
+/** Soft terrain shadow (x, 1 = lit) and sky visibility (y, 1 = open sky) from the shadow map. */
+vec2 terrainLight(vec3 P) {
+  if (uShadowOrigin.z <= 1.0) return vec2(1.0);
   vec2 uv = (P.xz - uShadowOrigin.xy) / uShadowOrigin.z + 0.5;
   vec2 e = min(uv, 1.0 - uv);
   float fade = smoothstep(0.0, 0.06, min(e.x, e.y));
-  if (fade <= 0.0) return 1.0;
-  return mix(1.0, texture(uShadowMap, uv).r, fade);
+  if (fade <= 0.0) return vec2(1.0);
+  return mix(vec2(1.0), texture(uShadowMap, uv).rg, fade);
 }
+float terrainShadow(vec3 P) { return terrainLight(P).x; }
+/** Ambient light factor from the sky visibility (ridges 1, deep valleys about 0.5). */
+float skyOcclusion(float vis) { return mix(0.4, 1.0, smoothstep(0.35, 0.97, vis)); }
 
 /** Shadow cast by the aircraft (1 = lit). */
 float planeShadow(vec3 P) {

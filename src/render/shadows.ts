@@ -1,5 +1,6 @@
 // Terrain self-shadowing for low sun angles: a heightfield around the camera is baked on the GPU
 // (time-sliced, double-buffered) and a soft shadow is raymarched through it towards the key light.
+// The same pass writes the sky visibility (ambient occlusion) into the green channel.
 import * as THREE from 'three';
 import { FullscreenPass, passMaterial } from './fullscreen.ts';
 import { globals } from './globals.ts';
@@ -27,9 +28,29 @@ uniform vec3 uKeyDir;
 uniform float uTexel;
 in vec2 vUv;
 out vec4 fragColor;
+// Sky visibility (ambient occlusion) from the same heightfield: the horizon's elevation in 8
+// directions out to about 1.5 km. Valleys and fjord walls get less sky light than ridges.
+float skyVisibility(float h0) {
+  float ext = uBakeOrigin.z;
+  float vis = 0.0;
+  for (int d = 0; d < 8; d++) {
+    float a = (float(d) + 0.5) * 0.7853982;
+    vec2 dir = vec2(cos(a), sin(a));
+    float tanH = 0.0;
+    float t = uTexel * 1.5;
+    for (int i = 0; i < 6; i++) {
+      float hs = textureLod(uHeight, vUv + dir * (t / ext), 0.0).r;
+      tanH = max(tanH, (hs - h0) / (t + 60.0));
+      t *= 2.0;
+    }
+    vis += 1.0 / (1.0 + tanH * tanH);
+  }
+  return vis * 0.125;
+}
 void main() {
-  if (uKeyDir.y < -0.02) { fragColor = vec4(0.0); return; }
   float h0 = texture(uHeight, vUv).r + 4.0;
+  float ao = skyVisibility(h0 - 4.0);
+  if (uKeyDir.y < -0.02) { fragColor = vec4(0.0, ao, 0.0, 1.0); return; }
   vec2 dir = normalize(uKeyDir.xz + 1e-6);
   float tanE = uKeyDir.y / max(length(uKeyDir.xz), 1e-4);
   float ext = uBakeOrigin.z;
@@ -45,7 +66,7 @@ void main() {
     if (vis < -1.0) break;
     t += max(uTexel * 0.75, t * 0.055);
   }
-  fragColor = vec4(clamp(0.5 + 0.5 * vis, 0.0, 1.0), 0.0, 0.0, 1.0);
+  fragColor = vec4(clamp(0.5 + 0.5 * vis, 0.0, 1.0), ao, 0.0, 1.0);
 }
 `;
 

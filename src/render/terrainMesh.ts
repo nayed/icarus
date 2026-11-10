@@ -155,6 +155,46 @@ void paintRunway(inout vec3 col, inout float rough, vec2 p, vec4 A, vec2 RW, flo
   rough = mix(rough, paved > 0.5 ? 0.7 : 0.95, inside);
 }
 
+// Rock relief in a vertical plane (q.x along the face, q.y up), so it does not stretch down a steep
+// slope the way noise projected from above does: broad beds, strata, thin ledges and vertical cracks.
+// Returns the bedding value (about -1..1), the relief's gradient in metres per metre along q, and
+// how deep in a crack the point is (0..1); stain is the dark streaks water leaves down a wall.
+// warp (metres) folds the beds.
+vec4 rockPlane(vec2 q, float warp, float foot, uint seed, out float stain) {
+  stain = smoothstep(0.15, 0.7, vnoise(q * vec2(1.0 / 23.0, 1.0 / 380.0) + 11.0, seed + 4u));
+  // the beds dip and fold instead of lying level
+  q.y += 0.11 * q.x + warp;
+  float val = 0.0;
+  vec2 grad = vec2(0.0);
+  float crack = 0.0;
+  float f = 1.0 - smoothstep(0.25, 0.7, foot / 26.0);
+  if (f > 0.0) {
+    vec3 n = noised(q * vec2(1.0 / 310.0, 1.0 / 26.0), seed);
+    val += 0.55 * n.x * f;
+    grad += 3.2 * f * n.yz * vec2(1.0 / 310.0, 1.0 / 26.0);
+  }
+  f = 1.0 - smoothstep(0.25, 0.7, foot / 6.0);
+  if (f > 0.0) {
+    vec3 n = noised(q * vec2(1.0 / 70.0, 1.0 / 6.0) + 31.7, seed + 1u);
+    val += 0.35 * n.x * f;
+    grad += 0.9 * f * n.yz * vec2(1.0 / 70.0, 1.0 / 6.0);
+  }
+  f = 1.0 - smoothstep(0.25, 0.7, foot / 1.7);
+  if (f > 0.0) {
+    vec3 n = noised(q * vec2(1.0 / 19.0, 1.0 / 1.7) + 7.3, seed + 2u);
+    val += 0.2 * n.x * f;
+    grad += 0.26 * f * n.yz * vec2(1.0 / 19.0, 1.0 / 1.7);
+    // cracks and gullies run down the face
+    vec2 qc = vec2(q.x + 2.2 * vnoise(vec2(q.y * (1.0 / 8.0), 0.5), seed + 8u), q.y);
+    vec3 c = noised(qc * vec2(1.0 / 4.7, 1.0 / 30.0) + 3.9, seed + 3u);
+    float cf = 1.0 - smoothstep(0.2, 0.6, foot / 2.0);
+    float d = 1.0 - smoothstep(0.0, 0.22, abs(c.x));
+    crack = d * cf;
+    grad += 0.9 * cf * d * sign(c.x) * c.yz * vec2(1.0 / 4.7, 1.0 / 30.0);
+  }
+  return vec4(val, grad, crack);
+}
+
 void main() {
   #include <logdepthbuf_fragment>
   if (uReflectPass > 0.5 && vWorld.y < SEA_LEVEL - 0.3) discard;
@@ -172,8 +212,43 @@ void main() {
   float nS = vnoise(P.xz * (1.0 / 19.0), 503u);
   float nT = vnoise(P.xz * (1.0 / 4.3), 504u);
   float slope = 1.0 - N.y;
+  // fine ground texture, only where a pixel resolves it
+  float fF = 1.0 - smoothstep(0.2, 0.6, foot / 0.9);
+  float nF = fF > 0.0 ? vnoise(P.xz * (1.0 / 0.9), 505u) * fF : 0.0;
+  float fG = 1.0 - smoothstep(0.2, 0.6, foot / 0.21);
+  float nG = fG > 0.0 ? vnoise(P.xz * (1.0 / 0.21), 506u) * fG : 0.0;
+  // rock relief on steep faces, from the two vertical planes weighted by the way the face looks
+  float steep = smoothstep(0.13, 0.38, slope);
+  vec3 N0 = N;
+  float bed = 0.0;
+  float crack = 0.0;
+  float stain = 0.0;
+  vec3 rockGrad = vec3(0.0);
+  if (steep > 0.0) {
+    vec2 w2 = N.xz * N.xz;
+    // a narrow blend: most pixels read one plane only
+    float wx = smoothstep(0.3, 0.7, w2.x / max(w2.x + w2.y, 1e-6));
+    float warp = 70.0 * nL + 9.0 * nM;
+    if (wx > 0.0) {
+      float st;
+      vec4 r = rockPlane(P.zy, warp, foot, 620u, st);
+      stain += wx * st;
+      bed += wx * r.x;
+      crack += wx * r.w;
+      rockGrad += wx * vec3(0.0, r.z, r.y);
+    }
+    if (wx < 1.0) {
+      float st;
+      vec4 r = rockPlane(P.xy, warp, foot, 630u, st);
+      stain += (1.0 - wx) * st;
+      bed += (1.0 - wx) * r.x;
+      crack += (1.0 - wx) * r.w;
+      rockGrad += (1.0 - wx) * vec3(r.y, r.z, 0.0);
+    }
+  }
   float snowLine = 960.0 + 160.0 * nL + 150.0 * N.z + 45.0 * nM;
-  float snow = smoothstep(snowLine - 40.0, snowLine + 60.0, y) * (1.0 - smoothstep(0.34, 0.52, slope + 0.07 * nS));
+  // snow holds on the ledges of a steep face and slides off the beds between them
+  float snow = smoothstep(snowLine - 40.0, snowLine + 60.0, y) * (1.0 - smoothstep(0.34, 0.52, slope + 0.07 * nS - 0.16 * steep * bed));
   // a dusting on gentle slopes a little lower down
   snow = max(snow, 0.6 * smoothstep(snowLine - 170.0, snowLine - 40.0, y) * (1.0 - smoothstep(0.1, 0.2, slope + 0.06 * nT)) * smoothstep(-0.2, 0.5, nS + 0.3 * nT));
   float treeLine = 430.0 + 110.0 * nL;
@@ -182,14 +257,15 @@ void main() {
     * smoothstep(3.0, 10.0, y)
     * smoothstep(-0.55, 0.05, nM + 0.45 * nS)
     * stripClearing(P.xz);
-  float rock = smoothstep(0.17, 0.33, slope + 0.07 * nS + 0.03 * nT);
+  // the finer the noise a pixel resolves, the crisper the edge between heath and rock
+  float rock = smoothstep(0.19, 0.31, slope + 0.07 * nS + 0.045 * nT + 0.04 * nF + 0.025 * nG);
   float scree = smoothstep(0.1, 0.2, slope) * (1.0 - rock) * smoothstep(250.0, 600.0, y);
   float beach = (1.0 - smoothstep(1.5, 4.5, y + 2.0 * nS)) * (1.0 - smoothstep(0.2, 0.45, slope));
 
   // ---- detail normal (procedural micro relief beyond the mesh resolution)
   vec2 dsum = vec2(0.0);
-  float detailStr = mix(0.18, 0.45, max(rock, scree)) * (1.0 - 0.75 * snow) * (1.0 - 0.6 * forest);
-  for (int i = 0; i < 5; i++) {
+  float detailStr = mix(0.2, 0.75, max(rock, scree)) * (1.0 - 0.75 * snow) * (1.0 - 0.6 * forest);
+  for (int i = 0; i < 7; i++) {
     float f = 1.0 / (60.0 / pow(2.3, float(i)));
     float fade = 1.0 - smoothstep(0.15, 0.5, foot * f);
     if (fade <= 0.0) break;
@@ -197,19 +273,55 @@ void main() {
     dsum += g.yz * fade;
   }
   N = normalize(N + vec3(-dsum.x, 0.0, -dsum.y) * detailStr * 0.32);
+  // forest canopy seen from above: crowns as bumps where the trees themselves are too far to draw
+  if (forest > 0.0) {
+    float cf = 1.0 - smoothstep(0.2, 0.6, foot / 7.0);
+    if (cf > 0.0) {
+      vec3 c = gnoised(P.xz * (1.0 / 7.0) + 5.1, 640u);
+      N = normalize(N + vec3(-c.y, 0.0, -c.z) * 0.55 * cf * forest);
+    }
+  }
+  // rock relief: tilt the normal by the relief's gradient within the surface
+  float rockBump = steep * rock * (1.0 - 0.85 * snow);
+  if (rockBump > 0.0) {
+    vec3 gT = rockGrad - N0 * dot(N0, rockGrad);
+    N = normalize(N - gT * rockBump);
+  }
 
   // ---- albedo (autumn: golden birch, rusty heath, dark wet rock, fresh snow on the tops)
   vec3 heath = mix(vec3(0.075, 0.068, 0.04), vec3(0.11, 0.07, 0.035), smoothstep(-0.4, 0.5, nM));
   heath = mix(heath, vec3(0.13, 0.05, 0.025), smoothstep(0.35, 0.75, nS) * smoothstep(-0.2, 0.4, nM) * 0.7);
   heath = mix(heath, vec3(0.1, 0.095, 0.08), smoothstep(0.2, 0.9, nT) * 0.35);
   heath *= 0.85 + 0.3 * nT;
+  // close up: dry grass tufts and bare patches
+  heath = mix(heath, vec3(0.17, 0.135, 0.06), 0.5 * smoothstep(0.0, 0.8, nF + 0.6 * nG));
+  heath = mix(heath, vec3(0.045, 0.04, 0.03), 0.5 * smoothstep(0.25, 0.9, -nF - 0.4 * nG));
   vec3 birch = mix(vec3(0.24, 0.16, 0.03), vec3(0.2, 0.085, 0.02), smoothstep(0.2, 0.9, nS));
   vec3 pine = vec3(0.02, 0.034, 0.02);
   vec3 forestCol = mix(pine, birch, smoothstep(-0.5, 0.4, nL + 0.7 * nM)) * (0.7 + 0.45 * (0.5 + 0.5 * nT));
   float strata = 0.5 + 0.5 * sin(y * 0.07 + nM * 3.0 + nS);
-  vec3 rockCol = mix(vec3(0.055, 0.056, 0.06), vec3(0.13, 0.125, 0.12), smoothstep(-0.6, 0.7, nM + 0.25 * strata + 0.3 * nT));
-  vec3 screeCol = mix(vec3(0.1, 0.095, 0.085), vec3(0.16, 0.15, 0.135), 0.5 + 0.5 * nT);
-  vec3 snowCol = vec3(0.8, 0.83, 0.88) * (0.94 + 0.06 * nT);
+  float rockTone = mix(nM + 0.25 * strata + 0.3 * nT, 0.6 * nM + 0.75 * bed + 0.25 * nT, steep);
+  vec3 rockCol = mix(vec3(0.05, 0.051, 0.056), vec3(0.14, 0.133, 0.125), smoothstep(-0.6, 0.7, rockTone));
+  // iron staining in some beds, dark wet cracks, heath on the ledges below the tree line
+  rockCol = mix(rockCol, rockCol * vec3(1.35, 1.0, 0.72), smoothstep(0.0, 0.9, nL + 0.6 * nM - 0.8 * bed) * 0.6);
+  rockCol *= (1.0 - 0.28 * crack * steep) * (1.0 - 0.42 * stain * smoothstep(-0.4, 0.3, nL - nM) * smoothstep(0.3, 0.55, slope));
+  rockCol = mix(rockCol, heath * 1.15, 0.7 * steep * smoothstep(0.05, 0.4, bed) * (1.0 - smoothstep(0.3, 0.5, slope)) * (1.0 - smoothstep(350.0, 800.0, y)));
+  rockCol *= 1.0 + 0.22 * nT + 0.22 * nF + 0.14 * nG;
+  vec3 screeCol = mix(vec3(0.1, 0.095, 0.085), vec3(0.16, 0.15, 0.135), 0.5 + 0.5 * nT) * (1.0 + 0.3 * nF + 0.25 * nG);
+  vec3 snowCol = vec3(0.75, 0.78, 0.84) * (0.94 + 0.06 * nT);
+  // wind-packed drifts: long ripples across the wind, seen in the low sun
+  if (snow > 0.0) {
+    vec2 wd = normalize(uWind.xz + vec2(1e-3, 0.0));
+    vec2 sq = vec2(dot(P.xz, wd), dot(P.xz, vec2(-wd.y, wd.x)));
+    float sf = 1.0 - smoothstep(0.2, 0.6, foot / 3.0);
+    if (sf > 0.0) {
+      vec3 d1 = gnoised(sq * vec2(1.0 / 3.0, 1.0 / 14.0), 650u);
+      vec3 d2 = gnoised(sq * vec2(1.0 / 0.8, 1.0 / 3.5) + 9.0, 651u) * (1.0 - smoothstep(0.2, 0.6, foot / 0.8));
+      vec2 gs = d1.yz * vec2(1.0, 3.0 / 14.0) + 0.6 * d2.yz * vec2(1.0, 0.8 / 3.5);
+      vec3 gw = vec3(gs.x * wd.x - gs.y * wd.y, 0.0, gs.x * wd.y + gs.y * wd.x);
+      N = normalize(N - gw * 0.16 * sf * snow);
+    }
+  }
   vec3 beachCol = mix(vec3(0.15, 0.14, 0.12), vec3(0.06, 0.055, 0.05), 1.0 - smoothstep(0.0, 2.0, y));
   vec3 col = heath;
   col = mix(col, forestCol, forest);
@@ -222,14 +334,17 @@ void main() {
 STRIP_PAINT
 
   // ---- lighting
-  float tsh = terrainShadow(P) * planeShadow(P);
+  vec2 tl = terrainLight(P);
+  float tsh = tl.x * planeShadow(P);
   float shSun = mix(1.0, tsh, uKeyIsSun) * cloudShadowAt(P, uSunDir);
   float shMoon = mix(tsh, 1.0, uKeyIsSun) * cloudShadowAt(P, uMoonDir);
   float shadow = shSun;
+  // less sky reaches the valley floors and the foot of the walls, and the inside of a crack
+  float occ = skyOcclusion(tl.y) * (1.0 - 0.35 * crack * rockBump);
   float ndl = max(dot(N, uSunDir), 0.0);
   float ndm = max(dot(N, uMoonDir), 0.0);
   vec3 direct = (uSunColor * ndl * shSun + uMoonColor * ndm * shMoon) / PI;
-  vec3 amb = envDiffuse(N) * (0.6 + 0.4 * N.y);
+  vec3 amb = envDiffuse(N) * (0.6 + 0.4 * N.y) * occ;
   vec3 lit = col * (direct + amb + lampLight(P, N) / PI);
   // snow sheen
   vec3 H = normalize(uSunDir - normalize(V));

@@ -154,6 +154,15 @@ grow on a strip, within 35 m of it or 250 m past its ends.
 ## Rendering
 - HDR half-float target (MSAA), Hillaire atmosphere LUTs, volumetric clouds at ½ or ¼ resolution with
   temporal accumulation and a depth-aware bicubic upsample, bloom mip chain, ACES, vignette, grain.
+- Terrain surface (`src/render/terrainMesh.ts`): steep faces take their rock relief (folded beds, ledges,
+  cracks, dark water stains) from noise in the two vertical planes, so it does not stretch down a slope;
+  snow holds on the ledges; ground texture and detail normals go down to about 0.2 m where a pixel
+  resolves them; distant forest gets canopy bumps. The terrain shadow pass (`shadows.ts`) also writes the
+  sky visibility (horizon in 8 directions out to 1.5 km) into its green channel: valley floors and the
+  foot of the walls get less ambient light, on the terrain and the trees (`terrainLight()`,
+  `skyOcclusion()` in `globals.ts`). Not on the LDR fallback (no shadow pass there).
+- Trees: leaf clumps from noise in the fragment shader where a pixel resolves them. Water ripples: the
+  wave trains' crests are bent by noise (straight parallel trains read as hatching).
 - Reversed-Z depth where `EXT_clip_control` exists, logarithmic depth otherwise.
 - Fallbacks: no WebGL2 → explanation screen. No float render targets → LDR pipeline (tone mapping in the
   materials, flat cloud layer instead of the volumetric one, no terrain self-shadows). Shader compile
@@ -239,6 +248,10 @@ grow on a strip, within 35 m of it or 250 m past its ends.
   | high | 9.1 – 16.4 | ≤ 6.0 |
   | medium | 6.2 – 9.6 | ≤ 4.7 |
   | low (renders at 0.75×) | 3.0 – 6.3 | ≤ 2.8 |
+
+  With the terrain, tree and ripple shading of 2026-11-10 the high preset measured 9.9 – 17.4 ms against
+  9.7 – 16.9 ms just before in the same session (0.5 – 1.5 ms more in the views full of rock or ground;
+  medium about 0.5 – 1 ms more before the shaders were trimmed, not re-measured after).
 
   The same session before them: 9.6 – 16.5 / 6.6 – 11.0 / 3.2 – 10.4 ms on the GPU, ≤ 6.2 / 4.1 / 3.8 ms
   on the main thread. This laptop iGPU varies a lot from run to run with its clocks and temperature
