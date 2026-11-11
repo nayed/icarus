@@ -12,7 +12,6 @@ import type { CameraMode } from '../camera/cameras.ts';
 import type { FlightModel, PilotInput } from '../sim/aircraft.ts';
 import * as scenarios from '../sim/scenarios.ts';
 import { SIM_DT } from '../sim/scenarios.ts';
-import { Autopilot } from '../sim/autopilot.ts';
 import { WATER_HOME, waterAt } from '../world/waterStart.ts';
 import { AIR_HOME } from '../world/airStart.ts';
 import { COURSES, type CourseId } from '../game/course.ts';
@@ -89,19 +88,23 @@ export function installDebugHooks(app: App): void {
       result: () => app.session?.result ?? null,
       state: () => app.state,
       gates: () => (app.session && 'gates' in app.session ? (app.session as unknown as { gates: unknown[] }).gates : null),
-      /** Fly the ring course with the autopilot (input override), gate by gate. */
+      /**
+       * Fly the ring course with the autopilot (input override), gate by gate, `cutCorner` metres wide of
+       * each; a mail run from the take-off to the landing.
+       */
       autoRings(cutCorner = 0) {
-        const mode = app.session as unknown as { gates: scenarios.RingGate[]; next: number };
-        const start = { x: app.ac.pos.x, y: app.ac.pos.y, z: app.ac.pos.z };
-        const ap = new Autopilot();
-        const inp = { ...app.controls.input, gearDown: false, flapNotch: 0 };
+        const mode = app.session as unknown as { gates: scenarios.RingGate[]; next: number; mail: scenarios.MailLegs | null };
+        const p = app.ac.pos;
+        const start = { x: p.x, y: mode.mail ? STRIPS[mode.mail.from].elevation + 40 : p.y, z: p.z };
+        const pilot = new scenarios.RingPilot(mode.gates, start, mode.mail, cutCorner);
+        const inp = { ...app.controls.input, gearDown: !!mode.mail, flapNotch: mode.mail ? 1 : 0 };
         app.inputOverride = inp;
-        const hook = () => {
-          const n = Math.min(mode.next, mode.gates.length - 1);
-          const s = scenarios.ringSteer(app.ac, n ? mode.gates[n - 1] : start, mode.gates[n], cutCorner);
-          ap.update(app.ac, { ...s, speed: 46, maxBank: 45 }, app.telemetry.ias, SIM_DT, inp);
+        const prevTd = app.ac.onTouchdown;
+        app.ac.onTouchdown = (t) => {
+          prevTd?.(t);
+          pilot.onTouchdown(t);
         };
-        app.onSimStep.push(hook);
+        app.onSimStep.push(() => pilot.update(app.ac, app.env, inp, SIM_DT, mode.next));
         return true;
       },
       /** Land on the landing's strip with the autopilot; `hard` drives it in with a high sink rate. */

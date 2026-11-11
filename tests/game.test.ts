@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { gradeLanding, gradeRings, gradeFromScore, type LandingInput } from '../src/game/grading.ts';
-import { COURSES, buildCourse, courseClearance, courseLength, coursePar, courseStart, GATE_COUNT } from '../src/game/course.ts';
+import { gradeLanding, gradeMail, gradeRings, gradeFromScore, type LandingInput } from '../src/game/grading.ts';
+import { COURSES, buildCourse, courseClearance, courseLength, coursePar, courseStart, stripIndex, GATE_COUNT } from '../src/game/course.ts';
 import { ringRun } from '../src/sim/scenarios.ts';
 import { terrainHeight } from '../src/world/terrain.ts';
 import type { FlightModel } from '../src/sim/aircraft.ts';
@@ -41,6 +41,20 @@ describe('ring run grade', () => {
     expect(gradeRings({ ...base, time: 250, missed: 3 }).headline).toBe('4:25.00');
     expect(gradeRings({ ...base, time: 100, crashed: true, crashReason: 'x' }).grade).toBe('F');
   });
+  it('grades a mail run on the time and the landing together', () => {
+    const rings = { course: 'Postruta', time: 430, missed: 0, penaltyPerMiss: 5, par: 432, gates: 14, crashed: false, crashReason: '', splits: [] };
+    const clean = gradeMail({ rings, landing: good });
+    expect(clean.title).toBe('Postruta');
+    expect(clean.headline).toBe('7:10.00');
+    expect(clean.score).toBe(Math.round((gradeRings(rings).score + gradeLanding(good).score) / 2));
+    expect(['S', 'A']).toContain(clean.grade);
+    // a slow run with a good landing, a fast one off the end of the strip, a crash
+    expect(gradeMail({ rings: { ...rings, time: 600 }, landing: good }).score).toBeLessThan(clean.score);
+    const overrun = gradeMail({ rings, landing: { ...good, stoppedOnRunway: false } });
+    expect(overrun.success).toBe(false);
+    expect(overrun.score).toBeLessThanOrEqual(45);
+    expect(gradeMail({ rings, landing: { ...good, crashed: true, crashReason: 'gear collapsed' } }).grade).toBe('F');
+  });
   it('maps scores to letters monotonically', () => {
     const order = ['F', 'D', 'C', 'B', 'A', 'S'];
     let last = 0;
@@ -52,8 +66,9 @@ describe('ring run grade', () => {
   });
 });
 
-describe.each(COURSES.map((c) => [c.name, c.id] as const))('ring course %s', (_, id) => {
-  const gates = buildCourse(id);
+describe.each(COURSES.map((c) => [c.name, c] as const))('ring course %s', (_, def) => {
+  const gates = buildCourse(def.id);
+  const mail = def.mail ? { from: stripIndex(def.mail.from), departure: def.mail.departure, to: stripIndex(def.mail.to) } : null;
   it('has 14 gates, roughly evenly spaced, all flown in the same general direction', () => {
     expect(gates.length).toBe(GATE_COUNT);
     for (let i = 1; i < gates.length; i++) {
@@ -75,19 +90,27 @@ describe.each(COURSES.map((c) => [c.name, c.id] as const))('ring course %s', (_,
     // cloud base 1550 m (CLOUD_BASE in src/render/clouds.ts)
     for (const g of gates) expect(g.y + g.radius).toBeLessThan(1450);
   });
-  it('starts with a clear run in to the first gate', () => {
+  // (a mail run starts on the runway, taking off along one of the strip's clear departures)
+  it.skipIf(!!mail)('starts with a clear run in to the first gate', () => {
     const s = courseStart(gates);
     for (let t = 0; t <= 1; t += 0.02) expect(s.y - Math.max(0, terrainHeight(s.x + (gates[0].x - s.x) * t, s.z + (gates[0].z - s.z) * t, 7))).toBeGreaterThan(50);
   });
-  // each model in a different wind: the default breeze, and 10 m/s from two sides
+  // each model in a different wind: the default breeze, and 10 m/s from two sides (a mail run lands in
+  // it: 6 m/s straight across the Vatne strip rather than 10)
   it.each([
     ['arcade', { from: 40, speed: 4 }],
-    ['assisted', { from: 220, speed: 10 }],
+    ['assisted', { from: 220, speed: mail ? 6 : 10 }],
     ['simulation', { from: 130, speed: 10 }],
   ] as [FlightModel, { from: number; speed: number }][])('is flown clean by the autopilot with the %s model, wind %o', (model, wind) => {
-    const r = ringRun(model, gates, courseStart(gates), wind);
-    expect(r.crashed, JSON.stringify(r)).toBe(false);
-    expect(r.passed, JSON.stringify(r)).toBe(gates.length);
-    expect(r.minAgl, JSON.stringify(r)).toBeGreaterThan(30);
+    const r = ringRun(model, gates, courseStart(gates), wind, mail);
+    const at = JSON.stringify(r);
+    expect(r.crashed, at).toBe(false);
+    expect(r.passed, at).toBe(gates.length);
+    expect(r.minAgl, at).toBeGreaterThan(30);
+    if (r.landing) {
+      expect(r.landing.stoppedOnRunway, at).toBe(true);
+      expect(Math.abs(r.landing.centreline), at).toBeLessThan(6);
+      expect(r.landing.pastThreshold, at).toBeGreaterThan(0);
+    }
   });
 });

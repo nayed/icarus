@@ -19,6 +19,8 @@ export interface ModeResult {
   subtitle: string;
   metrics: Metric[];
   success: boolean;
+  /** 0..100, what the grade was read from */
+  score: number;
 }
 
 export function gradeFromScore(score: number): Grade {
@@ -97,6 +99,7 @@ export function gradeLanding(l: LandingInput): ModeResult {
   return {
     mode: 'landing',
     title: l.strip,
+    score,
     grade,
     headline: String(score),
     subtitle,
@@ -140,6 +143,7 @@ export function gradeRings(r: RingsInput): ModeResult {
   return {
     mode: 'rings',
     title: r.course,
+    score,
     grade,
     headline: r.crashed ? 'DNF' : formatTime(total),
     subtitle: r.crashed ? r.crashReason : r.missed === 0 ? 'Clean run' : `${r.missed} gate${r.missed > 1 ? 's' : ''} missed (+${r.missed * r.penaltyPerMiss} s)`,
@@ -149,6 +153,45 @@ export function gradeRings(r: RingsInput): ModeResult {
       { label: 'Gates', value: `${passed} / ${r.gates}`, score: passed / r.gates },
       { label: 'Penalties', value: `+${r.missed * r.penaltyPerMiss} s`, score: r.missed === 0 ? 1 : Math.max(0, 1 - r.missed / 4) },
       { label: 'Par', value: formatTime(r.par), score: Math.min(1, r.par / Math.max(total, 1)) },
+    ],
+  };
+}
+
+export interface MailInput {
+  /** the gates, timed from the first one to the touchdown */
+  rings: RingsInput;
+  landing: LandingInput;
+}
+
+/**
+ * A mail run: half the time against par (as a ring run), half the landing (as the landing mode). A
+ * crash is an F; a landing off the strip, wheels up or not stopped on it, or no landing at all, at
+ * best a D.
+ */
+export function gradeMail(m: MailInput): ModeResult {
+  const r = gradeRings(m.rings);
+  const l = gradeLanding(m.landing);
+  const crashed = m.rings.crashed || m.landing.crashed;
+  let score = Math.round(r.score * 0.5 + l.score * 0.5);
+  if (!l.success) score = Math.min(score, 45);
+  const grade: Grade = crashed ? 'F' : gradeFromScore(score);
+  const [sink, , touchdown, , rollout] = l.metrics;
+  return {
+    mode: 'rings',
+    title: m.rings.course,
+    score,
+    grade,
+    headline: crashed ? 'DNF' : r.headline,
+    subtitle: crashed ? m.landing.crashReason || m.rings.crashReason : l.success ? `${r.subtitle} · ${l.subtitle}` : l.subtitle,
+    success: !crashed && l.success,
+    metrics: [
+      r.metrics[0],
+      r.metrics[1],
+      r.metrics[3],
+      { label: 'Landing', value: `${l.score} / 100`, score: l.score / 100 },
+      sink,
+      touchdown,
+      rollout,
     ],
   };
 }

@@ -1,4 +1,4 @@
-// Game modes end to end: ring run (clean on each circuit, and corner-cutting), landing on the mountain strip (good and hard) and on
+// Game modes end to end: ring run (clean on each circuit, the mail run with its landing, and corner-cutting), landing on the mountain strip (good and hard) and on
 // Hjelle, free-flight crash, free flight from a random airstrip, from a random spot on the water and from one in
 // the air, landings on a random strip.
 import { startServer, launch, waitFrames, shot, report } from './harness.mjs';
@@ -66,6 +66,23 @@ r = await waitResult(240000, async () => {
   else if (shots === 1 && h.timerSub?.startsWith('Gate 9')) { shots++; await shot(page, 'mode-islands-cinematic'); }
 });
 check(r && r.success && r.title === 'Holmeleia' && r.metrics[1].value === '14 / 14' && minAgl > 30, `clean run, never below ${minAgl.toFixed(0)} m: ${r ? `${r.title} ${r.grade} ${r.headline} (${r.subtitle}) — ${metrics(r)}` : 'no result'}`);
+
+console.log('\n== mail run on Postruta: take off from Hestskar, the gates, land on Vatne, autopilot');
+await open('rings', '&course=mail');
+hud = await page.evaluate(() => window.__icarus.session.hud());
+let st = await page.evaluate(() => window.__icarus.flight.state());
+check(hud?.title === 'Ring run · Postruta' && st.wheelsOnGround > 0 && Math.abs(st.y - 800) < 10, `on the Hestskar runway: ${hud?.title}, ${st.wheelsOnGround} wheels down at ${st.y.toFixed(0)} m, heading ${st.heading.toFixed(0)}°`);
+await page.evaluate(() => window.__icarus.session.autoRings(0));
+shots = 0;
+let landingHud = null;
+r = await waitResult(300000, async () => {
+  const h = await page.evaluate(() => window.__icarus.session.hud());
+  if (h.landing && !landingHud) landingHud = h;
+  if (shots === 0 && h.timerSub?.startsWith('Gate 2')) { shots++; await shot(page, 'mode-mail-chase'); }
+  else if (shots === 1 && h.landing && h.landing.dist < 900) { shots++; await shot(page, 'mode-mail-final'); }
+});
+check(!!landingHud && landingHud.target?.label === 'AIM' && landingHud.timerSub.startsWith('Land on Vatne'), `after the last gate the HUD guides the landing: ${landingHud ? `${landingHud.timerSub}, threshold ${landingHud.landing.dist.toFixed(0)} m` : 'never'}`);
+check(r && r.success && r.title === 'Postruta' && r.metrics[1].value === '14 / 14' && r.metrics.some((m) => m.label === 'Landing'), `delivered: ${r ? `${r.title} ${r.grade} ${r.headline} (${r.subtitle}) — ${metrics(r)}` : 'no result'}`);
 
 console.log('\n== ring run, cutting 45 m wide of every gate');
 await open('rings');

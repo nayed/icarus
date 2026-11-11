@@ -249,12 +249,12 @@ export class App {
     this.env.clip = this.world.clip;
   }
 
-  /** Puts the aircraft at a start point. */
-  startFlight(start: StartPoint): void {
+  /** Puts the aircraft at a start point: on a runway, facing `departure` or else its departure into the wind. */
+  startFlight(start: StartPoint, departure?: number): void {
     const ac = this.ac;
     this.env.follow(0, 0);
     if (start === 'runway') {
-      const p = runwayEnd(this.startStrip, 25, takeoffHeading(STRIPS[this.startStrip], this.settings.windFrom));
+      const p = runwayEnd(this.startStrip, 25, departure ?? takeoffHeading(STRIPS[this.startStrip], this.settings.windFrom));
       this.env.follow(p.x, p.z);
       ac.reset(p.x, drawnHeight(p.x, p.z, this.env.clip) + 2.42, p.z, p.heading, 0);
       this.controls.reset(0, true, 1);

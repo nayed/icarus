@@ -36,7 +36,7 @@ not part of this repository.
 - URL flags: `?q=low|medium|high`, `?t=dawn|day|golden|dusk|night|<hours>`, `?mode=free|rings|landing`
   with `&start=runway|water|air` (skips the menu; `&strip=coastal|mountain|north|east|south` picks the
   strip, `&water=x,z,heading` the spot on the water and `&air=x,y,z,heading` the one in the air, else
-  they are random; `&course=fjord|summits|islands` the ring run's circuit, else Fjordruta),
+  they are random; `&course=fjord|summits|islands|mail` the ring run's circuit, else Fjordruta),
   `?model=arcade|assisted|simulation`, `?noui`, `?nohud`, `?debug` (test API on `window.__icarus`),
   `?cam=x,y,z,yaw,pitch`, `?force=nowebgl2|nofloat|logdepth|noatlas`.
 - Preferences (mode, start, time, model, quality, sliders, map on/off) persist in `localStorage`.
@@ -93,7 +93,7 @@ Menu: Enter flies; Esc on the results card goes back to the menu.
   the path: Vatne from 3 km, Hjelle from 2.2 km (past a ridge 2.6 km out). Graded on sink rate,
   centreline, touchdown point (from the aim point), wings level and stopping on the strip. A crash or
   overrun is an F.
-- Ring run: 14 gates against the clock on one of three circuits, picked in a pane beside the menu (on a
+- Ring run: 14 gates against the clock on one of four circuits, picked in a pane beside the menu (on a
   phone it covers the menu, with a Back button), each tile a chart of its course. A missed gate costs
   5 s. Graded on time against the circuit's par.
   - Fjordruta (par 4:26): down the main fjord and into the north arm, 70–150 m over the water.
@@ -108,6 +108,15 @@ Menu: Enter flies; Esc on the results card goes back to the menu.
     to its south, through the gap by the islet south-west of it, north along its west coast, round its
     head and back down its east side. Its west side is near the edge of the first map: flying it bakes
     a new one around the aircraft.
+  - Postruta (par 7:12), the mail run: it starts on the Hestskar mountain strip (798 m), taking off
+    along 240°, and ends with a landing on the Vatne lake strip (95 m). The gates go down across the
+    main fjord's mouth and the coastal plain past Vika, over the bay, along the peninsula's west coast,
+    across the southern fjord and up the channel to the lake; the last one is on the final, 2.8 km out
+    on the 4° glide path, and from there the HUD guides the landing as in the landing mode. The clock
+    runs from the first gate to the touchdown; the par is the gates at about 105 kt plus the final at
+    about 64 kt. Graded half on the time against par, half on the landing (graded as in the landing
+    mode): a crash is an F, a landing off the strip, wheels up or not stopped on it, at best a D.
+    Coming to rest anywhere before the last gate ends the run, as not landed.
 - Arcade: rate-command attitude, protected stall. Assisted: real aerodynamics with auto-trim, turn
   coordination, wing leveller and stall protection. Simulation: raw aerodynamics with no protections
   (propeller torque, P-factor and adverse yaw are left for the pilot).
@@ -213,10 +222,12 @@ grow on a strip, within 35 m of it or 250 m past its ends.
   - autoland, then rest after rollout
   - lowest contact point never more than the tyre compression (≤ 0.16 m) below the drawn surface
 - Modes:
-  - autopilot ring runs 14/14: Fjordruta (B, 5:18.1), Tinderunden (A, 5:38.2), Holmeleia (B, 5:52.6); in
-    the unit tests the autopilot also flies each one clean with each flight model, in 4 and 10 m/s winds
+  - autopilot ring runs 14/14: Fjordruta (B, 5:18.1), Tinderunden (A, 5:38.2), Holmeleia (B, 5:52.6);
+    the mail run Postruta from take-off to landing (A, 7:12.4, landing 82); in the unit tests the
+    autopilot also flies each one clean with each flight model, in 4 and 10 m/s winds (Postruta lands in
+    6 m/s straight across the strip rather than 10)
   - a run 45 m wide of every gate is penalised (C)
-  - autopilot landings on the mountain strip (A, 84) and on Hjelle from its short final (A, 81)
+  - autopilot landings on the mountain strip (A, 86) and on Hjelle from its short final (A, 82)
   - landing flown into the ground (F, gear collapsed)
   - a crash into the sea ends free flight
   - free flight from an airstrip: 12 starts from the menu cover all five strips, never the same twice

@@ -5,7 +5,8 @@
 // the legs to it allow, and no leg climbing more than 7 % (the aircraft climbs at about 11 %).
 // Holmeleia goes round the big island off the coast at 55–70 m over the sea, placed by hand.
 // tests/game.test.ts checks both for clearance and flies them with the autopilot.
-import { FJORDS, SEA_LEVEL } from '../world/params.ts';
+import { FJORDS, SEA_LEVEL, STRIPS, headingDir, type StripDef } from '../world/params.ts';
+import { landingAim } from '../sim/scenarios.ts';
 import { terrainHeight } from '../world/terrain.ts';
 
 export interface Gate {
@@ -65,19 +66,30 @@ export function waterSection(x: number, z: number, nx: number, nz: number): { cx
   return { cx: x + nx * mid, cz: z + nz * mid, width: hi - lo };
 }
 
-export type CourseId = 'fjord' | 'summits' | 'islands';
+export type CourseId = 'fjord' | 'summits' | 'islands' | 'mail';
 
 export interface CourseDef {
   id: CourseId;
   name: string;
   /** one line for the menu */
   blurb: string;
+  /**
+   * A mail run: it starts on the runway of `from`, taking off along `departure`, and ends with the
+   * landing on `to`, along its heading, graded with the time.
+   */
+  mail?: { from: StripDef['id']; departure: number; to: StripDef['id'] };
 }
 
 export const COURSES: readonly CourseDef[] = [
   { id: 'fjord', name: 'Fjordruta', blurb: 'Down the fjord and into the north arm, low over the water.' },
   { id: 'summits', name: 'Tinderunden', blurb: 'Round the highest summit, through its passes, a thousand metres up.' },
   { id: 'islands', name: 'Holmeleia', blurb: 'Round the big island off the coast and through the sounds, low over the open sea.' },
+  {
+    id: 'mail',
+    name: 'Postruta',
+    blurb: 'The mail run: off the Hestskar mountain strip, down past the coast to the lakes, then land on the Vatne strip. Graded on the time and the landing.',
+    mail: { from: 'mountain', departure: 240, to: 'south' },
+  },
 ];
 
 export function courseDef(id: CourseId): CourseDef {
@@ -108,11 +120,39 @@ const ISLAND_GATES: readonly [number, number, number][] = [
   [-9350, 65, -2500], [-8150, 60, -2000], [-7600, 55, -850], [-7800, 55, 450],
 ];
 
-/** Gates through the points (x, y, z), each facing along the line from the gate before it to the one after. */
-function gatesThrough(pts: readonly (readonly [number, number, number])[]): Gate[] {
+/**
+ * Postruta's gates (x, height, z), from the Hestskar mountain strip (798 m) to the Vatne lake strip
+ * (95 m): down across the main fjord's mouth and the coastal plain past Vika, over the bay, south along
+ * the peninsula's west coast and round its tip, across the southern fjord and up the channel to the
+ * lake, the last gate on the final, 2.8 km out on the 4° glide path. No leg dives more than 8.5 %.
+ */
+const MAIL_GATES: readonly [number, number, number][] = [
+  [4300, 900, 1100], [3250, 830, 2050], [2350, 730, 3150], [1600, 620, 4300], [850, 510, 5400],
+  [-150, 410, 6450], [-1300, 320, 7300], [-2250, 240, 8400], [-2450, 190, 9750], [-2150, 160, 11050],
+  [-1200, 160, 12150], [-650, 180, 13350], [-700, 230, 14450], [-529, 293, 15309],
+];
+
+/** Index into STRIPS of a strip id. */
+export function stripIndex(id: StripDef['id']): number {
+  return STRIPS.findIndex((s) => s.id === id);
+}
+
+/** Where a landing on strip i aims to touch down: the landing mode's aim point, along the strip's heading. */
+export function landingPoint(i: number): { x: number; z: number } {
+  const s = STRIPS[i];
+  const d = headingDir(s.heading);
+  const back = s.halfLength - landingAim(s);
+  return { x: s.center[0] - d[0] * back, z: s.center[1] - d[1] * back };
+}
+
+/**
+ * Gates through the points (x, y, z), each facing along the line from the gate before it to the one
+ * after (or to `after` for the last one).
+ */
+function gatesThrough(pts: readonly (readonly [number, number, number])[], after?: { x: number; z: number }): Gate[] {
   return pts.map(([x, y, z], i) => {
     const a = pts[Math.max(0, i - 1)];
-    const b = pts[Math.min(pts.length - 1, i + 1)];
+    const b = i === pts.length - 1 && after ? [after.x, 0, after.z] : pts[Math.min(pts.length - 1, i + 1)];
     const dx = b[0] - a[0];
     const dz = b[2] - a[2];
     const l = Math.hypot(dx, dz) || 1;
@@ -124,8 +164,28 @@ const cached = new Map<CourseId, Gate[]>();
 
 export function buildCourse(id: CourseId = 'fjord'): Gate[] {
   let gates = cached.get(id);
-  if (!gates) cached.set(id, (gates = id === 'summits' ? gatesThrough(SUMMIT_GATES) : id === 'islands' ? gatesThrough(ISLAND_GATES) : fjordGates()));
+  if (!gates) {
+    gates =
+      id === 'summits' ? gatesThrough(SUMMIT_GATES)
+        : id === 'islands' ? gatesThrough(ISLAND_GATES)
+          : id === 'mail' ? gatesThrough(MAIL_GATES, landingPoint(stripIndex('south')))
+            : fjordGates();
+    cached.set(id, gates);
+  }
   return gates;
+}
+
+/**
+ * A circuit's par (s): its gates flown at about 105 kt (coursePar), and on a mail run the final from
+ * the last gate to the touchdown at about 64 kt.
+ */
+export function parFor(id: CourseId): number {
+  const gates = buildCourse(id);
+  const mail = courseDef(id).mail;
+  if (!mail) return coursePar(gates);
+  const g = gates[gates.length - 1];
+  const p = landingPoint(stripIndex(mail.to));
+  return coursePar(gates) + Math.round(Math.hypot(p.x - g.x, p.z - g.z) / 33);
 }
 
 /** Where a run starts: 1500 m short of the first gate, 10 m above it, flying through it. */

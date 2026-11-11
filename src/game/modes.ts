@@ -1,11 +1,11 @@
 // Game modes: free flight, the fjord ring run and the graded landing.
 import * as THREE from 'three';
 import type { App, StartPoint } from '../app.ts';
-import { buildCourse, courseDef, coursePar, courseStart, type Gate } from './course.ts';
-import { gradeLanding, gradeRings, formatTime, type ModeResult } from './grading.ts';
+import { buildCourse, courseDef, coursePar, courseStart, parFor, stripIndex, type Gate } from './course.ts';
+import { gradeLanding, gradeMail, gradeRings, formatTime, type LandingInput, type ModeResult } from './grading.ts';
 import type { Touchdown, PilotInput } from '../sim/aircraft.ts';
 import { Autopilot } from '../sim/autopilot.ts';
-import { STRIPS, headingDir } from '../world/params.ts';
+import { STRIPS, headingDir, type StripDef } from '../world/params.ts';
 import { runwayLocal } from '../sim/environment.ts';
 import { LANDING_GLIDE, landingAim } from '../sim/scenarios.ts';
 import { globals } from '../render/globals.ts';
@@ -51,6 +51,8 @@ export abstract class GameMode {
   protected currentPrompt(): Pick<ModeHud, 'prompt' | 'promptTone'> {
     return this.app.simTime < this.promptUntil ? { prompt: this.prompt, promptTone: this.promptTone } : {};
   }
+  /** aim() for helpers outside the mode. */
+  readonly aimAt = (x: number, y: number, z: number) => this.aim(x, y, z);
   /** Relative bearing/elevation of a world point from the aircraft. */
   protected aim(x: number, y: number, z: number): { bearing: number; elevation: number; dist: number } {
     const ac = this.app.ac;
@@ -105,6 +107,7 @@ export class FreeFlight extends GameMode {
       this.result = {
         mode: 'free',
         title: 'Free flight',
+        score: 0,
         grade: 'F',
         headline: 'Crashed',
         subtitle: ac.crashReason,
@@ -156,16 +159,30 @@ void main() {
 }
 `;
 
+/**
+ * A ring run: the gates against the clock, from the first gate to the last. A mail run (a course with
+ * `mail`) starts on a runway instead, and its clock runs on past the last gate to the touchdown on the
+ * strip at the other end, graded with the landing.
+ */
 export class RingRun extends GameMode {
   readonly kind = 'rings' as const;
   readonly course = courseDef(this.app.course);
   readonly gates: Gate[] = buildCourse(this.course.id);
-  readonly par = coursePar(this.gates);
+  readonly par = parFor(this.course.id);
+  /** the par from the first gate to the last (a mail run's par also has the final in it) */
+  private readonly gatesPar = coursePar(this.gates);
   readonly penalty = 5;
+  /** a mail run's ends, as indices into STRIPS (read by the autopilot hook) */
+  readonly mail = this.course.mail ? { from: stripIndex(this.course.mail.from), departure: this.course.mail.departure, to: stripIndex(this.course.mail.to) } : null;
+  private readonly watch = this.mail ? new LandingWatch(this.app, this.mail.to) : null;
   next = 0;
   missed = 0;
   startTime = -1;
+  /** when the clock stopped: the last gate, or a mail run's touchdown */
   finishTime = -1;
+  /** a mail run: when it passed the last gate, and how long it has been at rest on the ground before that */
+  private lastGateAt = -1;
+  private restingFor = 0;
   splits: number[] = [];
   private readonly group = new THREE.Group();
   private readonly mats: THREE.ShaderMaterial[] = [];
@@ -177,10 +194,23 @@ export class RingRun extends GameMode {
 
   begin(): void {
     const ac = this.app.ac;
-    const s = courseStart(this.gates);
-    ac.reset(s.x, s.y, s.z, s.heading, 47);
-    this.app.controls.reset(0.72, false, 0);
-    this.app.startFlightAt();
+    if (this.mail) {
+      this.app.startStrip = this.mail.from;
+      this.app.startFlight('runway', this.mail.departure);
+      ac.onTouchdown = (t) => {
+        // touchdowns count from the last gate on (not the wheels leaving the runway at the start)
+        if (this.next < this.gates.length || !this.watch) return;
+        const said = this.watch.touchdown(t);
+        if (!said) return;
+        this.finishTime = this.app.simTime;
+        this.say(said.text, said.tone, 3);
+      };
+    } else {
+      const s = courseStart(this.gates);
+      ac.reset(s.x, s.y, s.z, s.heading, 47);
+      this.app.controls.reset(0.72, false, 0);
+      this.app.startFlightAt();
+    }
     this.prev.copy(ac.pos);
     this.states = this.gates.map((_, i) => (i === 0 ? 1 : 0));
     this.fade = this.gates.map(() => -1);
@@ -204,7 +234,8 @@ export class RingRun extends GameMode {
       this.group.add(m);
     }
     this.app.world.scene.add(this.group);
-    this.say(`Fly through all ${this.gates.length} gates. Par ${formatTime(this.par)}.`, 'info', 5);
+    if (this.mail) this.say(`The mail for ${STRIPS[this.mail.to].name.split(' ')[0]}. Take off, fly the ${this.gates.length} gates, then land on the ${STRIPS[this.mail.to].name}.`, 'info', 7);
+    else this.say(`Fly through all ${this.gates.length} gates. Par ${formatTime(this.par)}.`, 'info', 5);
   }
 
   override end(): void {
@@ -218,13 +249,27 @@ export class RingRun extends GameMode {
     return (p.x - g.x) * g.nx + (p.z - g.z) * g.nz;
   }
 
-  override simStep(): void {
+  override simStep(dt: number): void {
     const ac = this.app.ac;
     const p = ac.pos;
     if (this.result) return;
     if (ac.crashed) {
       this.finish(true);
       return;
+    }
+    if (this.watch) {
+      // past the last gate: over once landed and stopped, given up far from the strip or long after
+      if (this.next >= this.gates.length) {
+        if (this.watch.step(dt) || (!this.watch.td && (this.watch.distance() > 9000 || this.app.simTime - this.lastGateAt > 300))) this.finish(false);
+        return;
+      }
+      // put down before it (on the way, or back on the runway at the start): over too
+      const resting = ac.wheelsOnGround + ac.keelOnGround + ac.keelInWater > 0 && Math.hypot(ac.vel.x, ac.vel.z) < 0.6;
+      this.restingFor = resting && this.app.simTime > 20 ? this.restingFor + dt : 0;
+      if (this.restingFor > 5) {
+        this.finish(false);
+        return;
+      }
     }
     // check the next gate and the few after it (skipping counts as missing)
     for (let j = this.next; j < Math.min(this.gates.length, this.next + 3); j++) {
@@ -260,14 +305,12 @@ export class RingRun extends GameMode {
     this.app.audio.chime();
     if (this.next < this.gates.length) {
       this.states[this.next] = 1;
-      const ghost = (this.par * i) / (this.gates.length - 1);
+      const ghost = (this.gatesPar * i) / (this.gates.length - 1);
       const delta = now - this.startTime - ghost;
       if (i > 0) this.say(`Gate ${i + 1} · ${delta >= 0 ? '+' : '−'}${Math.abs(delta).toFixed(1)} s`, delta <= 0 ? 'good' : 'info', 2);
-    } else {
-      this.finishTime = now;
-      this.finish(false);
-    }
+    } else this.lastGate();
   }
+
 
   private miss(i: number): void {
     if (this.startTime < 0) this.startTime = this.app.simTime;
@@ -278,28 +321,40 @@ export class RingRun extends GameMode {
     this.say(`Missed gate ${i + 1} · +${this.penalty} s`, 'warn', 2.5);
     this.app.audio.motor(0.25);
     if (this.next < this.gates.length) this.states[this.next] = 1;
-    else {
-      this.finishTime = this.app.simTime;
-      this.finish(false);
+    else this.lastGate();
+  }
+
+  /** Past the last gate: a ring run is over; a mail run goes on to the landing. */
+  private lastGate(): void {
+    if (this.watch) {
+      this.lastGateAt = this.app.simTime;
+      this.say(`Last gate. Land on the ${this.watch.strip.name}.`, 'info', 4);
+      return;
     }
+    this.finishTime = this.app.simTime;
+    this.finish(false);
   }
 
   private finish(crashed: boolean): void {
-    const time = crashed ? this.app.simTime - Math.max(this.startTime, 0) : this.finishTime - this.startTime;
-    this.result = gradeRings({
+    // the clock stopped at the last gate (a mail run: at the touchdown), or runs to now; the gates
+    // not flown count as missed
+    const time = (this.finishTime > 0 && !crashed ? this.finishTime : this.app.simTime) - Math.max(this.startTime, 0);
+    const rings = {
       course: this.course.name,
       time,
-      missed: this.missed + (crashed ? this.gates.length - this.next : 0),
+      missed: this.missed + this.gates.length - this.next,
       penaltyPerMiss: this.penalty,
       par: this.par,
       gates: this.gates.length,
       crashed,
       crashReason: this.app.ac.crashReason,
       splits: this.splits,
-    });
+    };
+    this.result = this.watch ? gradeMail({ rings, landing: this.watch.input() }) : gradeRings(rings);
   }
 
   override frame(dt: number): void {
+    if (this.watch) this.gearAdvice();
     this.pulse = (this.pulse + dt * 2.2) % (Math.PI * 2);
     this.mats.forEach((m, i) => {
       m.uniforms.uState.value = this.states[i];
@@ -319,91 +374,89 @@ export class RingRun extends GameMode {
   hud(): ModeHud {
     const now = this.app.simTime;
     const elapsed = this.startTime < 0 ? 0 : (this.finishTime > 0 ? this.finishTime : now) - this.startTime;
+    const landing = !!this.watch && this.next >= this.gates.length;
     const h: ModeHud = {
       title: `Ring run · ${this.course.name}`,
       timer: formatTime(elapsed + this.missed * this.penalty),
-      timerSub: `Gate ${Math.min(this.next + 1, this.gates.length)} / ${this.gates.length}${this.missed ? ` · ${this.missed} missed` : ''}`,
-      map: { gates: this.gates, gateStates: this.states },
+      timerSub: landing ? `Land on ${this.watch!.strip.name.split(' ')[0]}${this.missed ? ` · ${this.missed} missed` : ''}` : `Gate ${Math.min(this.next + 1, this.gates.length)} / ${this.gates.length}${this.missed ? ` · ${this.missed} missed` : ''}`,
+      map: { gates: this.gates, gateStates: this.states, strip: this.mail?.to },
       ...this.currentPrompt(),
     };
     const g = this.gates[this.next];
     if (g && !this.result) h.target = { label: `${this.next + 1}`, ...this.aim(g.x, g.y, g.z) };
+    if (landing && !this.result) Object.assign(h, this.watch!.hud(this.aimAt));
     return h;
   }
 }
 
 // ---------------------------------------------------------------- landing
 
-/** A final approach to an airstrip (picked at random by App.startSession), graded on the touchdown. */
-export class Landing extends GameMode {
-  readonly kind = 'landing' as const;
-  /** the strip (index into STRIPS), landed on along its heading */
-  readonly index = this.app.startStrip;
-  readonly strip = STRIPS[this.index];
-  readonly aimDist = landingAim(this.strip);
-  private td: Touchdown | null = null;
+/**
+ * Watches a landing on strip `index`, along its heading: the touchdown, bounces after it, and the end
+ * (stopped on the ground, or climbing away after touching down). Its hud() guides the approach. Used
+ * by the landing mode and at the end of a mail run.
+ */
+class LandingWatch {
+  readonly strip: StripDef;
+  readonly aimDist: number;
+  td: Touchdown | null = null;
   private bounces = 0;
   private airborneSince = -1;
   private stoppedFor = 0;
   private tdAlong = 0;
-  private maxAlong = -1e9;
 
-  begin(): void {
-    this.app.startFlight('approach');
-    this.app.controls.reset(0.42, true, 1);
-    this.app.ac.onTouchdown = (t) => {
-      if (!this.td) {
-        this.td = t;
-        this.tdAlong = runwayLocal(this.index, t.x, t.z).along;
-        const fpm = Math.round(t.sinkRate * 196.85);
-        this.say(`Touchdown ${fpm} fpm`, fpm < 350 ? 'good' : fpm < 700 ? 'info' : 'warn', 3);
-      } else if (this.airborneSince >= 0 && this.app.simTime - this.airborneSince > 0.25) {
-        this.bounces++;
-      }
-      this.airborneSince = -1;
-    };
-    this.say(`Land on the ${this.strip.name} ahead. Gear down, flaps as needed, aim for the markers.`, 'info', 7);
+  constructor(private readonly app: App, readonly index: number) {
+    this.strip = STRIPS[index];
+    this.aimDist = landingAim(this.strip);
   }
 
-  override simStep(dt: number): void {
-    if (this.result) return;
+  /** A touchdown: the first is the landing (what to say about it is returned), later ones after a hop are bounces. */
+  touchdown(t: Touchdown): { text: string; tone: 'info' | 'warn' | 'good' } | null {
+    let said: { text: string; tone: 'info' | 'warn' | 'good' } | null = null;
+    if (!this.td) {
+      this.td = t;
+      this.tdAlong = runwayLocal(this.index, t.x, t.z).along;
+      const fpm = Math.round(t.sinkRate * 196.85);
+      said = { text: `Touchdown ${fpm} fpm`, tone: fpm < 350 ? 'good' : fpm < 700 ? 'info' : 'warn' };
+    } else if (this.airborneSince >= 0 && this.app.simTime - this.airborneSince > 0.25) {
+      this.bounces++;
+    }
+    this.airborneSince = -1;
+    return said;
+  }
+
+  /** After the touchdown: true once the landing is over (stopped, or climbing away above 60 m). */
+  step(dt: number): boolean {
+    if (!this.td) return false;
     const ac = this.app.ac;
-    const t = this.app.telemetry;
-    if (ac.crashed) {
-      this.finish();
-      return;
-    }
-    if (this.td) {
-      const contact = ac.wheelsOnGround + ac.keelOnGround + ac.keelInWater > 0;
-      if (!contact && this.airborneSince < 0) this.airborneSince = this.app.simTime;
-      const local = runwayLocal(this.index, ac.pos.x, ac.pos.z);
-      this.maxAlong = Math.max(this.maxAlong, local.along);
-      if (contact && Math.hypot(ac.vel.x, ac.vel.z) < 0.6) this.stoppedFor += dt;
-      else this.stoppedFor = 0;
-      if (this.stoppedFor > 1.5) this.finish();
-      // a go-around after touchdown: climbing away above 60 m resets nothing but ends badly
-      if (!contact && t.agl > 60) this.finish();
-    } else {
-      // gave up: far away or long time
-      const d = Math.hypot(ac.pos.x - this.strip.center[0], ac.pos.z - this.strip.center[1]);
-      if (d > 9000 || this.app.simTime > 420) this.finish();
-    }
+    const contact = ac.wheelsOnGround + ac.keelOnGround + ac.keelInWater > 0;
+    if (!contact && this.airborneSince < 0) this.airborneSince = this.app.simTime;
+    if (contact && Math.hypot(ac.vel.x, ac.vel.z) < 0.6) this.stoppedFor += dt;
+    else this.stoppedFor = 0;
+    return this.stoppedFor > 1.5 || (!contact && this.app.telemetry.agl > 60);
   }
 
-  private finish(): void {
+  /** The distance (m) from the aircraft to the strip's center. */
+  distance(): number {
+    const p = this.app.ac.pos;
+    return Math.hypot(p.x - this.strip.center[0], p.z - this.strip.center[1]);
+  }
+
+  input(): LandingInput {
     const ac = this.app.ac;
     const td = this.td;
-    const thrAlong = -this.strip.halfLength;
+    const s = this.strip;
+    const thrAlong = -s.halfLength;
     const tdLocal = td ? runwayLocal(this.index, td.x, td.z) : { along: thrAlong - 1000, across: 0 };
     const fin = runwayLocal(this.index, ac.pos.x, ac.pos.z);
-    const stopped = !!td && !ac.crashed && Math.abs(fin.along) <= this.strip.halfLength && Math.abs(fin.across) <= this.strip.halfWidth + 2 && Math.hypot(ac.vel.x, ac.vel.z) < 0.6;
-    this.result = gradeLanding({
-      strip: this.strip.name,
+    const stopped = !!td && !ac.crashed && Math.abs(fin.along) <= s.halfLength && Math.abs(fin.across) <= s.halfWidth + 2 && Math.hypot(ac.vel.x, ac.vel.z) < 0.6;
+    return {
+      strip: s.name,
       sinkRate: td?.sinkRate ?? 0,
       centreline: tdLocal.across,
       pastThreshold: tdLocal.along - thrAlong,
       aim: this.aimDist,
-      runwayLength: this.strip.halfLength * 2,
+      runwayLength: s.halfLength * 2,
       bank: td?.bank ?? 0,
       bounces: this.bounces,
       stoppedOnRunway: stopped,
@@ -412,7 +465,51 @@ export class Landing extends GameMode {
       gearDown: td?.gearDown ?? true,
       onRunway: td?.onRunway ?? false,
       rollout: td ? fin.along - this.tdAlong : 0,
-    });
+    };
+  }
+
+  /** Until the touchdown: the approach guide (threshold, glide path, centerline) and the aim point. */
+  hud(aim: GameMode['aimAt']): Pick<ModeHud, 'landing' | 'target'> {
+    if (this.td) return {};
+    const ac = this.app.ac;
+    const s = this.strip;
+    const local = runwayLocal(this.index, ac.pos.x, ac.pos.z);
+    const thrAlong = -s.halfLength;
+    const aimAlong = thrAlong + this.aimDist;
+    const distAim = aimAlong - local.along;
+    const want = s.elevation + LANDING_GLIDE.wheels + Math.max(distAim, 0) * Math.tan((LANDING_GLIDE.angle * Math.PI) / 180);
+    const d = headingDir(s.heading);
+    return {
+      landing: { dist: thrAlong - local.along, glideDev: ac.pos.y - want, centreDev: local.across, targetKt: 58 },
+      target: { label: 'AIM', ...aim(s.center[0] + d[0] * aimAlong, s.elevation + 1, s.center[1] + d[1] * aimAlong) },
+    };
+  }
+}
+
+/** A final approach to an airstrip (picked at random by App.startSession), graded on the touchdown. */
+export class Landing extends GameMode {
+  readonly kind = 'landing' as const;
+  /** the strip (index into STRIPS), landed on along its heading */
+  readonly index = this.app.startStrip;
+  readonly strip = STRIPS[this.index];
+  private readonly watch = new LandingWatch(this.app, this.index);
+
+  begin(): void {
+    this.app.startFlight('approach');
+    this.app.controls.reset(0.42, true, 1);
+    this.app.ac.onTouchdown = (t) => {
+      const said = this.watch.touchdown(t);
+      if (said) this.say(said.text, said.tone, 3);
+    };
+    this.say(`Land on the ${this.strip.name} ahead. Gear down, flaps as needed, aim for the markers.`, 'info', 7);
+  }
+
+  override simStep(dt: number): void {
+    if (this.result) return;
+    // over when stopped or crashed; given up when far away or after a long time without landing
+    if (this.app.ac.crashed || this.watch.step(dt) || (!this.watch.td && (this.watch.distance() > 9000 || this.app.simTime > 420))) {
+      this.result = gradeLanding(this.watch.input());
+    }
   }
 
   override frame(): void {
@@ -420,24 +517,7 @@ export class Landing extends GameMode {
   }
 
   hud(): ModeHud {
-    const ac = this.app.ac;
-    const s = this.strip;
-    const local = runwayLocal(this.index, ac.pos.x, ac.pos.z);
-    const thrAlong = -s.halfLength;
-    const toThr = thrAlong - local.along;
-    const aimAlong = thrAlong + this.aimDist;
-    const distAim = aimAlong - local.along;
-    const want = s.elevation + LANDING_GLIDE.wheels + Math.max(distAim, 0) * Math.tan((LANDING_GLIDE.angle * Math.PI) / 180);
-    const d = headingDir(s.heading);
-    const thx = s.center[0] + d[0] * aimAlong;
-    const thz = s.center[1] + d[1] * aimAlong;
-    return {
-      title: 'Landing',
-      landing: this.td ? undefined : { dist: toThr, glideDev: ac.pos.y - want, centreDev: local.across, targetKt: 58 },
-      target: this.td ? undefined : { label: 'AIM', ...this.aim(thx, s.elevation + 1, thz) },
-      map: { strip: STRIPS.indexOf(s) },
-      ...this.currentPrompt(),
-    };
+    return { title: 'Landing', ...this.watch.hud(this.aimAt), map: { strip: this.index }, ...this.currentPrompt() };
   }
 }
 

@@ -242,8 +242,10 @@ export class ApproachController {
     const across = -rx * d[1] + rz * d[0];
     const hdg = s.heading - clamp(across * 0.6, -25, 25);
     if (this.phase === 'approach') {
+      // on the approach, the heading that makes good that track over the ground (crabbed into a crosswind)
+      const drift = ((((ac.heading - (Math.atan2(ac.vel.x, -ac.vel.z) * 180) / Math.PI) % 360) + 540) % 360) - 180;
       const hTgt = s.elevation + 2.5 + Math.max(-along, 0) * Math.tan(this.gs);
-      this.ap.update(ac, { heading: hdg, vs: -31 * Math.sin(this.gs) + clamp((hTgt - ac.pos.y) * 0.25, -3, 3), speed: 31, maxBank: 15 }, t.ias, dt, inp);
+      this.ap.update(ac, { heading: hdg + drift, vs: -31 * Math.sin(this.gs) + clamp((hTgt - ac.pos.y) * 0.25, -3, 3), speed: 31, maxBank: 15 }, t.ias, dt, inp);
       if (t.agl < 9) this.phase = 'flare';
     } else if (this.phase === 'flare') {
       this.ap.update(ac, { heading: hdg, vs: -1, speed: 0, throttle: 0, maxBank: 8 }, t.ias, dt, inp);
@@ -431,19 +433,87 @@ export function ringSteer(ac: Aircraft, from: { x: number; y: number; z: number 
   return { heading: (gateHdg - corr + drift + 720) % 360, altitude: from.y + (g.y - from.y) * t };
 }
 
+/** A mail run's two ends: off strip `from` along `departure`, then onto strip `to` along its heading (indices into STRIPS). */
+export interface MailLegs {
+  from: number;
+  departure: number;
+  to: number;
+}
+
 /**
- * The autopilot flies a ring course from `start` (as the ring run places it: 47 m/s, 72 % power,
- * gear up, flaps up), gate by gate, counting a gate passed when the aircraft crosses its plane
- * inside the ring; `misses` are the gates missed (numbered from 1), `worst` the furthest from a
- * gate's centre it crossed (m).
+ * The autopilot through a ring course: off the strip first on a mail run, then gate by gate along
+ * ringSteer() (`next` is the gate the mode waits for), then down onto the strip at the end of a mail
+ * run (ApproachController: wire the aircraft's touchdowns to onTouchdown()). Used by the ring tests
+ * here and by the in-browser hook.
  */
-export function ringRun(model: FlightModel, gates: readonly RingGate[], start: { x: number; y: number; z: number; heading: number }, wind = { from: 40, speed: 4 }): { passed: number; missed: number; misses: number[]; worst: number; seconds: number; minAgl: number; crashed: boolean; crashReason: string } {
+export class RingPilot {
+  phase: 'takeoff' | 'gates' | 'landing';
+  readonly approach: ApproachController | null;
+  private readonly ap = new Autopilot();
+  private readonly gates: readonly RingGate[];
+  private readonly start: { x: number; y: number; z: number };
+  private readonly departure: number;
+  private readonly cut: number;
+
+  constructor(gates: readonly RingGate[], start: { x: number; y: number; z: number }, mail: MailLegs | null = null, cut = 0) {
+    this.gates = gates;
+    this.start = start;
+    this.cut = cut;
+    this.departure = mail?.departure ?? 0;
+    this.phase = mail ? 'takeoff' : 'gates';
+    this.approach = mail ? new ApproachController(STRIPS[mail.to], false, landingAim(STRIPS[mail.to]) + 10) : null;
+  }
+
+  /** Touchdowns count once the landing has begun (not the wheels leaving the strip at the start). */
+  onTouchdown(t: Touchdown): void {
+    if (this.phase === 'landing') this.approach?.onTouchdown(t);
+  }
+
+  update(ac: Aircraft, env: WorldEnv, inp: PilotInput, dt: number, next: number): void {
+    const t = ac.telemetry(env);
+    if (this.phase === 'takeoff') {
+      // full power and 8° of pitch once flying speed is near, wings level, along the departure
+      Object.assign(inp, { throttle: 1, flapNotch: 1, gearDown: true, brake: 0 });
+      inp.pitch = t.ias > 27 ? clamp((8 - t.pitch) * 0.1 - ac.omega.x * 0.5, -0.3, 0.6) : 0;
+      inp.roll = clamp(-t.bank * 0.05 + ac.omega.z * 0.4, -1, 1);
+      inp.yaw = clamp((((this.departure - t.heading + 540) % 360) - 180) * 0.08 + ac.beta * 1.5, -1, 1);
+      if (t.agl < 40) return;
+      this.phase = 'gates';
+      inp.flapNotch = 0;
+    }
+    if (this.phase === 'gates' && next >= this.gates.length && this.approach) this.phase = 'landing';
+    if (this.phase === 'landing') {
+      Object.assign(inp, { flapNotch: 2, gearDown: true });
+      this.approach!.update(ac, env, inp, dt);
+      return;
+    }
+    const n = Math.min(next, this.gates.length - 1);
+    const s = ringSteer(ac, n ? this.gates[n - 1] : this.start, this.gates[n], this.cut);
+    this.ap.update(ac, { ...s, speed: 46, maxBank: 45 }, t.ias, dt, inp);
+  }
+}
+
+/**
+ * The autopilot flies a ring course, gate by gate, counting a gate passed when the aircraft crosses
+ * its plane inside the ring; `misses` are the gates missed (numbered from 1), `worst` the furthest
+ * from a gate's centre it crossed (m), `minAgl` the lowest it flew between the first gate and the
+ * last. A circuit starts from `start` as the ring run places it (47 m/s, 72 % power, gear up, flaps
+ * up); a mail run on the runway of `mail.from` instead, and ends with the landing on `mail.to`.
+ */
+export function ringRun(model: FlightModel, gates: readonly RingGate[], start: { x: number; y: number; z: number; heading: number }, wind = { from: 40, speed: 4 }, mail: MailLegs | null = null): { passed: number; missed: number; misses: number[]; worst: number; seconds: number; minAgl: number; crashed: boolean; crashReason: string; landing: ApproachResult | null } {
   const r = makeRig(model);
   r.env.setWind(wind.from, wind.speed);
-  r.env.follow(start.x, start.z);
-  r.ac.reset(start.x, start.y, start.z, start.heading, 47);
-  r.ac.configure(false, 0);
-  Object.assign(r.inp, { throttle: 0.72, gearDown: false, flapNotch: 0 });
+  if (mail) {
+    placeOnRunway(r, mail.from, 20, mail.departure);
+    r.ac.configure(true, 1);
+  } else {
+    r.env.follow(start.x, start.z);
+    r.ac.reset(start.x, start.y, start.z, start.heading, 47);
+    r.ac.configure(false, 0);
+    Object.assign(r.inp, { throttle: 0.72, gearDown: false, flapNotch: 0 });
+  }
+  const pilot = new RingPilot(gates, mail ? { x: r.ac.pos.x, y: STRIPS[mail.from].elevation + 40, z: r.ac.pos.z } : start, mail);
+  r.ac.onTouchdown = (t) => pilot.onTouchdown(t);
   let next = 0;
   let passed = 0;
   let minAgl = Infinity;
@@ -452,24 +522,26 @@ export function ringRun(model: FlightModel, gates: readonly RingGate[], start: {
   const prev = r.ac.pos.clone();
   const side = (g: RingGate, p: THREE.Vector3) => (p.x - g.x) * g.nx + (p.z - g.z) * g.nz;
   let steps = 0;
-  for (const limit = Math.round((60 + gates.length * 40) / SIM_DT); next < gates.length && steps < limit && !r.ac.crashed; steps++) {
+  let seconds = 0;
+  const limit = Math.round((90 + gates.length * 40 + (mail ? 200 : 0)) / SIM_DT);
+  for (; steps < limit && !r.ac.crashed; steps++) {
+    if (next >= gates.length && (!mail || (pilot.approach!.touchdown && r.ac.vel.length() < 0.5))) break;
     r.env.follow(r.ac.pos.x, r.ac.pos.z);
     const t = r.ac.telemetry(r.env);
-    minAgl = Math.min(minAgl, t.agl);
-    const s = ringSteer(r.ac, next ? gates[next - 1] : start, gates[next]);
-    r.ap.update(r.ac, { ...s, speed: 46, maxBank: 45 }, t.ias, SIM_DT, r.inp);
+    if (next > 0 && next < gates.length) minAgl = Math.min(minAgl, t.agl);
+    pilot.update(r.ac, r.env, r.inp, SIM_DT, next);
     r.ac.step(SIM_DT, r.inp, r.env);
     const p = r.ac.pos;
     const g = gates[next];
-    if (side(g, prev) < 0 && side(g, p) >= 0) {
+    if (g && side(g, prev) < 0 && side(g, p) >= 0) {
       const miss = Math.hypot(p.x - g.x, p.y - g.y, p.z - g.z);
       worst = Math.max(worst, miss);
       if (miss <= g.radius) passed++;
       else misses.push(next + 1);
       next++;
+      if (next === gates.length) seconds = steps * SIM_DT;
     }
     prev.copy(p);
   }
-  const seconds = steps * SIM_DT;
-  return { passed, missed: next - passed, misses, worst, seconds, minAgl, crashed: r.ac.crashed, crashReason: r.ac.crashReason };
+  return { passed, missed: next - passed, misses, worst, seconds: seconds || steps * SIM_DT, minAgl, crashed: r.ac.crashed, crashReason: r.ac.crashReason, landing: mail ? pilot.approach!.result(r.ac, r.env) : null };
 }
