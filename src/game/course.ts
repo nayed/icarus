@@ -3,7 +3,8 @@
 // Tinderunden goes round the highest summit (1530 m) at 800–1190 m, through the pass and the saddle
 // between it and the ridges around it: placed by hand, each gate as low as the ground under it and
 // the legs to it allow, and no leg climbing more than 7 % (the aircraft climbs at about 11 %).
-// Holmeleia goes round the big island off the coast at 55–70 m over the sea, placed by hand.
+// Holmeleia goes round the big island off the coast at 55–70 m over the sea, Gjelet down a narrow
+// gorge and Postruta is a mail run from one strip to another, all placed by hand.
 // tests/game.test.ts checks both for clearance and flies them with the autopilot.
 import { FJORDS, SEA_LEVEL, STRIPS, headingDir, type StripDef } from '../world/params.ts';
 import { landingAim } from '../sim/scenarios.ts';
@@ -66,7 +67,7 @@ export function waterSection(x: number, z: number, nx: number, nz: number): { cx
   return { cx: x + nx * mid, cz: z + nz * mid, width: hi - lo };
 }
 
-export type CourseId = 'fjord' | 'summits' | 'islands' | 'mail';
+export type CourseId = 'fjord' | 'summits' | 'islands' | 'gorge' | 'mail';
 
 export interface CourseDef {
   id: CourseId;
@@ -84,6 +85,7 @@ export const COURSES: readonly CourseDef[] = [
   { id: 'fjord', name: 'Fjordruta', blurb: 'Down the fjord and into the north arm, low over the water.' },
   { id: 'summits', name: 'Tinderunden', blurb: 'Round the highest summit, through its passes, a thousand metres up.' },
   { id: 'islands', name: 'Holmeleia', blurb: 'Round the big island off the coast and through the sounds, low over the open sea.' },
+  { id: 'gorge', name: 'Gjelet', blurb: 'Down a narrow gorge from its head to the fjord, weaving low between walls 700 meters high.' },
   {
     id: 'mail',
     name: 'Postruta',
@@ -118,6 +120,18 @@ const ISLAND_GATES: readonly [number, number, number][] = [
   [-7300, 60, 3050], [-8300, 55, 3130], [-9400, 60, 3400], [-10400, 65, 2950], [-10450, 55, 1900],
   [-10450, 55, 800], [-10850, 60, -150], [-11950, 70, -800], [-11850, 60, -2000], [-10650, 55, -2650],
   [-9350, 65, -2500], [-8150, 60, -2000], [-7600, 55, -850], [-7800, 55, 450],
+];
+
+/**
+ * Gjelet's gates (x, height, z), down the narrow arm south-east of the main fjord, from the head of its
+ * gorge to its mouth on the southern fjord: 500–900 m wide between walls 600–870 m high, the gates
+ * weaving 60 m either side of the middle, 620 m apart, 55–65 m over the water after the first two drop
+ * into it. The run starts over the dry head of the valley.
+ */
+const GORGE_GATES: readonly [number, number, number][] = [
+  [28311, 160, 21007], [27894, 110, 20543], [27615, 70, 19980], [27200, 60, 19520], [26951, 55, 18931],
+  [26558, 60, 18405], [26449, 65, 17756], [26113, 55, 17233], [25882, 60, 16653], [25406, 55, 16208],
+  [25210, 65, 15607], [24848, 60, 15099], [24652, 55, 14499], [24656, 60, 13787],
 ];
 
 /**
@@ -168,6 +182,7 @@ export function buildCourse(id: CourseId = 'fjord'): Gate[] {
     gates =
       id === 'summits' ? gatesThrough(SUMMIT_GATES)
         : id === 'islands' ? gatesThrough(ISLAND_GATES)
+          : id === 'gorge' ? gatesThrough(GORGE_GATES)
           : id === 'mail' ? gatesThrough(MAIL_GATES, landingPoint(stripIndex('south')))
             : fjordGates();
     cached.set(id, gates);

@@ -67,6 +67,19 @@ r = await waitResult(240000, async () => {
 });
 check(r && r.success && r.title === 'Holmeleia' && r.metrics[1].value === '14 / 14' && minAgl > 30, `clean run, never below ${minAgl.toFixed(0)} m: ${r ? `${r.title} ${r.grade} ${r.headline} (${r.subtitle}) — ${metrics(r)}` : 'no result'}`);
 
+console.log('\n== ring run on Gjelet, down the gorge, autopilot');
+await open('rings', '&course=gorge');
+await page.evaluate(() => window.__icarus.session.autoRings(0));
+shots = 0;
+minAgl = Infinity;
+r = await waitResult(240000, async () => {
+  const [h, s] = await page.evaluate(() => [window.__icarus.session.hud(), window.__icarus.flight.state()]);
+  minAgl = Math.min(minAgl, s.agl);
+  if (shots === 0 && h.timerSub?.startsWith('Gate 5')) { shots++; await shot(page, 'mode-gorge-chase'); await page.evaluate(() => window.__icarus.setCameraMode('cinematic')); }
+  else if (shots === 1 && h.timerSub?.startsWith('Gate 10')) { shots++; await shot(page, 'mode-gorge-cinematic'); }
+});
+check(r && r.success && r.title === 'Gjelet' && r.metrics[1].value === '14 / 14' && minAgl > 30, `clean run, never below ${minAgl.toFixed(0)} m: ${r ? `${r.title} ${r.grade} ${r.headline} (${r.subtitle}) — ${metrics(r)}` : 'no result'}`);
+
 console.log('\n== mail run on Postruta: take off from Hestskar, the gates, land on Vatne, autopilot');
 await open('rings', '&course=mail');
 hud = await page.evaluate(() => window.__icarus.session.hud());

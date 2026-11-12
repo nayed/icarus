@@ -80,8 +80,9 @@ describe.each(COURSES.map((c) => [c.name, c] as const))('ring course %s', (_, de
       // and no leg climbs more steeply than the aircraft can (about 11 % at 90 kt)
       expect((gates[i].y - gates[i - 1].y) / d).toBeLessThan(0.08);
     }
-    expect(courseLength(gates)).toBeGreaterThan(10000);
-    expect(coursePar(gates)).toBeGreaterThan(180);
+    // (Gjelet, down one gorge, is the shortest)
+    expect(courseLength(gates)).toBeGreaterThan(8000);
+    expect(coursePar(gates)).toBeGreaterThan(150);
   });
   it('keeps every ring and every straight leg well clear of terrain and water, and below the clouds', () => {
     const c = courseClearance(gates);

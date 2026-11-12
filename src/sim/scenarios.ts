@@ -412,25 +412,29 @@ export interface RingGate {
 
 /**
  * The autopilot's way through the next gate, coming from `from` (the gate before, or the start):
- * line following onto the gate's axis over the ground, offset sideways by `cut` (to test misses), and the height
- * along the straight line between the two, looked ahead by 350 m so the climbs and dives start in
- * time. Used by the ring tests here and by the in-browser hook.
+ * line following onto the gate's axis over the ground, offset sideways by `cut` (to test misses), looking
+ * ahead less on shorter legs (a gorge's slalom), and the height along the straight line between the
+ * two, looked ahead by 350 m so the climbs and dives start in time. The heading is crabbed into `wind` (the air's velocity, m/s) so the aircraft makes
+ * good that track over the ground. Used by the ring tests here and by the in-browser hook.
  */
-export function ringSteer(ac: Aircraft, from: { x: number; y: number; z: number }, g: RingGate, cut = 0): { heading: number; altitude: number } {
+export function ringSteer(ac: Aircraft, from: { x: number; y: number; z: number }, g: RingGate, cut = 0, wind = { x: 0, z: 0 }): { heading: number; altitude: number } {
   const cx = g.x - g.nz * cut;
   const cz = g.z + g.nx * cut;
   const rx = ac.pos.x - cx;
   const rz = ac.pos.z - cz;
   const along = -(rx * g.nx + rz * g.nz);
   const cross = rx * -g.nz + rz * g.nx; // + right of the line
-  const look = Math.max(140, along * 0.35);
-  const gateHdg = (Math.atan2(g.nx, -g.nz) * 180) / Math.PI;
-  const corr = clamp((Math.atan2(cross, look) * 180) / Math.PI, -65, 65);
-  // the heading that makes good that track over the ground: the wind's drift, from the velocity
-  const drift = ((((ac.heading - (Math.atan2(ac.vel.x, -ac.vel.z) * 180) / Math.PI) % 360) + 540) % 360) - 180;
   const leg = Math.max(1, Math.hypot(g.x - from.x, g.z - from.z));
+  const scale = clamp(leg / 1200, 0.5, 1);
+  const look = Math.max(140 * scale, along * 0.35 * scale);
+  const gateHdg = (Math.atan2(g.nx, -g.nz) * 180) / Math.PI;
+  const track = gateHdg - clamp((Math.atan2(cross, look) * 180) / Math.PI, -65, 65);
+  // the crab angle: the wind across that track (+ from the left) against the airspeed
+  const a = (track * Math.PI) / 180;
+  const across = wind.x * Math.cos(a) + wind.z * Math.sin(a);
+  const crab = (Math.asin(clamp(across / Math.max(ac.vel.length(), 20), -0.6, 0.6)) * 180) / Math.PI;
   const t = clamp(1 - (along - 350) / leg, 0, 1);
-  return { heading: (gateHdg - corr + drift + 720) % 360, altitude: from.y + (g.y - from.y) * t };
+  return { heading: (track - crab + 720) % 360, altitude: from.y + (g.y - from.y) * t };
 }
 
 /** A mail run's two ends: off strip `from` along `departure`, then onto strip `to` along its heading (indices into STRIPS). */
@@ -450,6 +454,7 @@ export class RingPilot {
   phase: 'takeoff' | 'gates' | 'landing';
   readonly approach: ApproachController | null;
   private readonly ap = new Autopilot();
+  private readonly wind = new THREE.Vector3();
   private readonly gates: readonly RingGate[];
   private readonly start: { x: number; y: number; z: number };
   private readonly departure: number;
@@ -488,7 +493,8 @@ export class RingPilot {
       return;
     }
     const n = Math.min(next, this.gates.length - 1);
-    const s = ringSteer(ac, n ? this.gates[n - 1] : this.start, this.gates[n], this.cut);
+    const w = env.wind(ac.pos.x, ac.pos.y, ac.pos.z, ac.time, this.wind);
+    const s = ringSteer(ac, n ? this.gates[n - 1] : this.start, this.gates[n], this.cut, w);
     this.ap.update(ac, { ...s, speed: 46, maxBank: 45 }, t.ias, dt, inp);
   }
 }
