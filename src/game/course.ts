@@ -83,9 +83,9 @@ export interface CourseDef {
 
 export const COURSES: readonly CourseDef[] = [
   { id: 'fjord', name: 'Fjordruta', blurb: 'Down the fjord and into the north arm, low over the water.' },
-  { id: 'summits', name: 'Tinderunden', blurb: 'Round the highest summit, through its passes, a thousand metres up.' },
+  { id: 'summits', name: 'Tinderunden', blurb: 'Round the highest summit, through its passes, 3,300 feet up.' },
   { id: 'islands', name: 'Holmeleia', blurb: 'Round the big island off the coast and through the sounds, low over the open sea.' },
-  { id: 'gorge', name: 'Gjelet', blurb: 'Down a narrow gorge from its head to the fjord, weaving low between walls 700 meters high.' },
+  { id: 'gorge', name: 'Gjelet', blurb: 'Down a narrow gorge from its head to the fjord, weaving low between walls 2,300 feet high.' },
   {
     id: 'mail',
     name: 'Postruta',
