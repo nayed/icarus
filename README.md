@@ -64,7 +64,7 @@ and its instrument panel, even the engine sound. There are no models, textures o
   water; round the highest summit, through its passes, 3,300 feet up; round the big island off
   the coast, through the sounds, low over the open sea; down a narrow gorge, weaving between its walls;
   or the mail run, from the mountain strip down to the lakes, ending with a landing graded with the
-  time.
+  time. Your best run on each one is kept in your browser.
 
 <p>
   <img src="docs/screenshots/ring-run.jpg" alt="Lining up for gate 3 of the ring run" width="49%">

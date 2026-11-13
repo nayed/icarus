@@ -39,6 +39,7 @@ let r = await waitResult(240000, async () => {
   else if (shots === 2 && h.timerSub?.startsWith('Gate 12')) { shots++; await shot(page, 'mode-rings-cockpit'); }
 });
 check(r && r.success && r.metrics[1].value === '14 / 14', `clean run: ${r ? `${r.grade} ${r.headline} (${r.subtitle}) — ${metrics(r)}` : 'no result'}`);
+check(r?.best?.isNew === true && (await page.textContent('.results .best')) === 'New best on this circuit', `the first clean run is the circuit's best: ${JSON.stringify(r?.best)}`);
 check((await page.evaluate(() => window.__icarus.session.state())) === 'results', 'app switched to the results state');
 
 console.log('\n== ring run on Tinderunden, round the summit, autopilot');
@@ -102,6 +103,7 @@ await open('rings');
 await page.evaluate(() => window.__icarus.session.autoRings(45));
 r = await waitResult(240000);
 check(r && r.metrics[1].value !== '14 / 14' && r.subtitle.includes('missed'), `misses are penalised: ${r ? `${r.grade} ${r.headline} (${r.subtitle})` : 'no result'}`);
+check(r?.best && !r.best.isNew && (await page.textContent('.results .best')).startsWith('Best 5:'), `a slower run leaves the best alone: ${await page.textContent('.results .best')}`);
 
 console.log('\n== landing on the mountain strip, autopilot');
 await open('landing', '&strip=mountain');

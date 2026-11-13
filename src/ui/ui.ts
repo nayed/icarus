@@ -359,7 +359,9 @@ export class UI {
       <div class="label">${r.title}</div>
       <div class="top">
         <div class="grade ${good ? '' : 'dim'}">${r.grade}</div>
-        <div><div class="headline">${r.headline}</div><div class="subtitle">${r.subtitle}</div></div>
+        <div><div class="headline">${r.headline}</div><div class="subtitle">${r.subtitle}</div>${
+          r.best ? `<div class="best${r.best.isNew ? ' new' : ''}">${r.best.isNew ? 'New best on this circuit' : `Best ${formatTime(r.best.seconds)} · ${r.best.grade}`}</div>` : ''
+        }</div>
       </div>
       <div class="metrics">${r.metrics
         .map((m) => `<div class="metric"><span class="ml">${m.label}${m.note ? ` <span style="color:var(--faint)">· ${m.note}</span>` : ''}</span><span class="mv">${m.value}</span><div class="bar"><i data-w="${Math.round(Math.max(0, Math.min(1, m.score)) * 100)}"></i></div></div>`)

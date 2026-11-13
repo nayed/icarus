@@ -1,10 +1,11 @@
 // The ring run's circuits, beside the main menu: a grid of square tiles, each a chart of its course
 // (the map image, the gates, the first one ringed; a mail run's strips, the one to land on in the
-// accent) under its name and par. On a phone the pane covers the menu instead, with a Back button.
+// accent) under its name, par and best run in this browser. On a phone the pane covers the menu instead, with a Back button.
 import type { App } from '../app.ts';
 import { COURSES, buildCourse, parFor, stripIndex, type CourseId } from '../game/course.ts';
 import { STRIPS } from '../world/params.ts';
 import { formatTime } from '../game/grading.ts';
+import { bestRun } from '../game/records.ts';
 import { drawGates, drawStrips, drawTerrain, label, type ChartView } from './chart.ts';
 import { MUTED } from './palette.ts';
 
@@ -24,15 +25,17 @@ export class CoursePane {
     this.grid = el.querySelector('[data-course-grid]') as HTMLElement;
     this.note = el.querySelector('[data-course-note]') as HTMLElement;
     this.grid.innerHTML = COURSES.map(
-      (c) => `<button type="button" class="course-card" data-course="${c.id}" aria-pressed="false"><canvas aria-hidden="true"></canvas><span class="cap"><span class="t">${c.name}</span><span class="d">${buildCourse(c.id).length} gates${c.mail ? ' + landing' : ''} · par ${parLabel(c.id)}</span></span></button>`,
+      (c) => `<button type="button" class="course-card" data-course="${c.id}" aria-pressed="false"><canvas aria-hidden="true"></canvas><span class="cap"><span class="t">${c.name}</span><span class="d">${buildCourse(c.id).length} gates${c.mail ? ' + landing' : ''} · par ${parLabel(c.id)}</span><span class="b" data-best></span></span></button>`,
     ).join('');
   }
 
-  /** Marks the chosen circuit and shows its description. */
+  /** Marks the chosen circuit, shows its description, and each circuit's best run in this browser. */
   select(id: CourseId): void {
     for (const b of this.grid.querySelectorAll<HTMLElement>('[data-course]')) {
       b.classList.toggle('on', b.dataset.course === id);
       b.setAttribute('aria-pressed', String(b.dataset.course === id));
+      const best = bestRun(b.dataset.course as CourseId);
+      (b.querySelector('[data-best]') as HTMLElement).textContent = best ? `Best ${formatTime(best.seconds)} · ${best.grade}` : '';
     }
     this.note.textContent = (COURSES.find((c) => c.id === id) ?? COURSES[0]).blurb;
   }

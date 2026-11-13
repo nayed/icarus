@@ -45,8 +45,12 @@ for (const [w, h, tag] of [[1920, 1080, 'desktop'], [390, 844, 'phone']]) {
     await page.keyboard.press('KeyI');
     await sleep(300);
     check(iOpen && !(await sheetOpen()), 'I opens and closes the controls sheet in the menu');
+    // a best run kept in this browser shows on its tile
+    await page.evaluate(() => localStorage.setItem('icarus.best.v1', JSON.stringify({ islands: { score: 85, grade: 'A', seconds: 301.5, model: 'assisted', date: '2026-11-13' } })));
     await page.click('.card[data-mode="rings"]');
     await sleep(500);
+    const bests = await page.evaluate(() => [...document.querySelectorAll('.course-card [data-best]')].map((b) => b.textContent));
+    check(bests.join('|') === '||Best 5:01.50 · A||', `the tiles show the best runs kept: ${JSON.stringify(bests)}`);
     let cp = await pane(page);
     check(cp.on && cp.tiles === 5 && cp.sel === 'fjord', `choosing Ring run shows the circuits beside the menu (${JSON.stringify(cp)})`);
     await page.click('.course-card[data-course="summits"]');

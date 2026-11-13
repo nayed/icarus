@@ -21,6 +21,8 @@ export interface ModeResult {
   success: boolean;
   /** 0..100, what the grade was read from */
   score: number;
+  /** a ring run: the circuit's best run in this browser (this one, if it is new) */
+  best?: { seconds: number; grade: Grade; isNew: boolean };
 }
 
 export function gradeFromScore(score: number): Grade {

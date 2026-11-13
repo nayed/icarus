@@ -13,6 +13,7 @@ import { ATMOSPHERE_GLSL, SKYVIEW_SAMPLE_GLSL } from '../render/atmosphere.ts';
 import { GLOBALS_GLSL } from '../render/globals.ts';
 import { OUTPUT_GLSL } from '../render/post.ts';
 import type { ModeMap } from '../ui/chart.ts';
+import { bestRun, recordRun } from './records.ts';
 
 export type ModeKind = 'free' | 'rings' | 'landing' | 'attract';
 
@@ -350,7 +351,13 @@ export class RingRun extends GameMode {
       crashReason: this.app.ac.crashReason,
       splits: this.splits,
     };
-    this.result = this.watch ? gradeMail({ rings, landing: this.watch.input() }) : gradeRings(rings);
+    const r = this.watch ? gradeMail({ rings, landing: this.watch.input() }) : gradeRings(rings);
+    // the circuit's best run in this browser: this one, if it beats it
+    const seconds = time + rings.missed * this.penalty;
+    const isNew = recordRun(this.course.id, { score: r.score, grade: r.grade, seconds, model: this.app.settings.model }, r.success);
+    const best = bestRun(this.course.id);
+    if (best) r.best = { seconds: best.seconds, grade: best.grade, isNew };
+    this.result = r;
   }
 
   override frame(dt: number): void {

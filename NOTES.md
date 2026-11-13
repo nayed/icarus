@@ -96,6 +96,11 @@ Menu: Enter flies; Esc on the results card goes back to the menu.
 - Ring run: 14 gates against the clock on one of five circuits, picked in a pane beside the menu (on a
   phone it covers the menu, with a Back button), each tile a chart of its course. A missed gate costs
   5 s. Graded on time against the circuit's par.
+  - Best runs: each circuit's best successful run (no crash; on the mail run, landed on the strip) is
+    kept in the browser's local storage (`icarus.best.v1`, `src/game/records.ts`), ranked by score (for
+    a circuit, the fastest time with its penalties; on the mail run, the landing counts too). Its tile
+    shows its time and grade, and the results card says when a run beats it. It stays on that browser
+    and device, nothing is sent anywhere, and clearing the site's data forgets it.
   - Fjordruta (par 4:26): down the main fjord and into the north arm, 70–150 m over the water.
   - Tinderunden (par 5:15): clockwise round the highest summit (1530 m) at 800–1190 m: up from the
     main fjord into the high basin south of it, through the pass between it and the south-west ridge,
@@ -230,6 +235,8 @@ grow on a strip, within 35 m of it or 250 m past its ends.
     Gjelet (B, 3:12.0); the mail run Postruta from take-off to landing (A, 7:13.0, landing 81); in the
     unit tests the autopilot also flies each one clean with each flight model, in 4 and 10 m/s winds
     (Postruta lands in 6 m/s straight across the strip rather than 10)
+  - the first clean run on a circuit is kept as its best (the results card says so), a slower one
+    leaves it alone, and a kept best shows on its tile
   - a run 45 m wide of every gate is penalised (C)
   - autopilot landings on the mountain strip (A, 86) and on Hjelle from its short final (A, 82)
   - landing flown into the ground (F, gear collapsed)
