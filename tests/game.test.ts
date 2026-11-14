@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { gradeLanding, gradeMail, gradeRings, gradeFromScore, type LandingInput } from '../src/game/grading.ts';
-import { COURSES, buildCourse, courseClearance, courseLength, coursePar, courseStart, stripIndex, GATE_COUNT } from '../src/game/course.ts';
+import { COURSES, buildCourse, courseClearance, courseLength, coursePar, courseStart, laneDepth, stripIndex } from '../src/game/course.ts';
 import { ringRun } from '../src/sim/scenarios.ts';
 import { terrainHeight } from '../src/world/terrain.ts';
 import type { FlightModel } from '../src/sim/aircraft.ts';
@@ -41,6 +41,15 @@ describe('ring run grade', () => {
     expect(gradeRings({ ...base, time: 250, missed: 3 }).headline).toBe('4:25.00');
     expect(gradeRings({ ...base, time: 100, crashed: true, crashReason: 'x' }).grade).toBe('F');
   });
+  it('adds the splash lanes\' seconds and counts them apart from the rings', () => {
+    const base = { course: 'Plaskruta', time: 360, missed: 1, penaltyPerMiss: 5, par: 373, gates: 14, crashed: false, crashReason: '', splits: [] };
+    const r = gradeRings({ ...base, extra: 10, splashes: { done: 2, total: 3 } });
+    // a missed lane (5 s as a gate, 5 more as a lane) and a hard splash (5 s)
+    expect(r.headline).toBe('6:15.00');
+    expect(r.metrics.find((m) => m.label === 'Gates')?.value).toBe('11 / 11');
+    expect(r.metrics.find((m) => m.label === 'Splashes')?.value).toBe('2 / 3');
+    expect(r.metrics.find((m) => m.label === 'Penalties')?.value).toBe('+15 s');
+  });
   it('grades a mail run on the time and the landing together', () => {
     const rings = { course: 'Postruta', time: 430, missed: 0, penaltyPerMiss: 5, par: 432, gates: 14, crashed: false, crashReason: '', splits: [] };
     const clean = gradeMail({ rings, landing: good });
@@ -69,8 +78,8 @@ describe('ring run grade', () => {
 describe.each(COURSES.map((c) => [c.name, c] as const))('ring course %s', (_, def) => {
   const gates = buildCourse(def.id);
   const mail = def.mail ? { from: stripIndex(def.mail.from), departure: def.mail.departure, to: stripIndex(def.mail.to) } : null;
-  it('has 14 gates, roughly evenly spaced, all flown in the same general direction', () => {
-    expect(gates.length).toBe(GATE_COUNT);
+  it('has its gates roughly evenly spaced, all flown in the same general direction', () => {
+    expect(gates.length).toBeGreaterThanOrEqual(10);
     for (let i = 1; i < gates.length; i++) {
       const d = Math.hypot(gates[i].x - gates[i - 1].x, gates[i].z - gates[i - 1].z);
       expect(d).toBeGreaterThan(600);
@@ -91,6 +100,14 @@ describe.each(COURSES.map((c) => [c.name, c] as const))('ring course %s', (_, de
     // cloud base 1550 m (CLOUD_BASE in src/render/clouds.ts)
     for (const g of gates) expect(g.y + g.radius).toBeLessThan(1450);
   });
+  it.skipIf(!gates.some((g) => g.lane))('has its splash lanes on deep water, with a ring before and after each', () => {
+    gates.forEach((g, i) => {
+      if (!g.lane) return;
+      expect(laneDepth(g), `lane at gate ${i + 1}`).toBeGreaterThan(5);
+      expect(gates[i - 1]?.lane, `gate ${i}`).toBeUndefined();
+      expect(gates[i + 1]?.lane, `gate ${i + 2}`).toBeUndefined();
+    });
+  });
   // (a mail run starts on the runway, taking off along one of the strip's clear departures)
   it.skipIf(!!mail)('starts with a clear run in to the first gate', () => {
     const s = courseStart(gates);
@@ -108,6 +125,13 @@ describe.each(COURSES.map((c) => [c.name, c] as const))('ring course %s', (_, de
     expect(r.crashed, at).toBe(false);
     expect(r.passed, at).toBe(gates.length);
     expect(r.minAgl, at).toBeGreaterThan(30);
+    // the splash lanes touched down in, gently, and left in the air
+    const lanes = gates.filter((g) => g.lane).length;
+    expect(r.splashes, at).toBe(lanes);
+    if (lanes) {
+      expect(r.long, at).toBe(0);
+      expect(r.hardest, at).toBeLessThan(400);
+    }
     if (r.landing) {
       expect(r.landing.stoppedOnRunway, at).toBe(true);
       expect(Math.abs(r.landing.centreline), at).toBeLessThan(6);

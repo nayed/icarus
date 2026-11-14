@@ -123,6 +123,10 @@ export interface RingsInput {
   time: number;
   missed: number;
   penaltyPerMiss: number;
+  /** seconds added besides the missed gates (splash lanes: missed, run long, hard) */
+  extra?: number;
+  /** splash lanes touched down in, out of how many */
+  splashes?: { done: number; total: number };
   par: number;
   gates: number;
   crashed: boolean;
@@ -137,7 +141,8 @@ export function formatTime(t: number): string {
 }
 
 export function gradeRings(r: RingsInput): ModeResult {
-  const total = r.time + r.missed * r.penaltyPerMiss;
+  const added = r.missed * r.penaltyPerMiss + (r.extra ?? 0);
+  const total = r.time + added;
   const ratio = total / r.par;
   const score = Math.round(curve(ratio, [[0.9, 100], [1.0, 93], [1.1, 82], [1.25, 67], [1.45, 52], [1.7, 37], [2.2, 10], [3, 0]]));
   const grade: Grade = r.crashed ? 'F' : gradeFromScore(score);
@@ -148,12 +153,14 @@ export function gradeRings(r: RingsInput): ModeResult {
     score,
     grade,
     headline: r.crashed ? 'DNF' : formatTime(total),
-    subtitle: r.crashed ? r.crashReason : r.missed === 0 ? 'Clean run' : `${r.missed} gate${r.missed > 1 ? 's' : ''} missed (+${r.missed * r.penaltyPerMiss} s)`,
+    subtitle: r.crashed ? r.crashReason : added === 0 ? 'Clean run' : r.missed === 0 ? `+${added} s for the splashes` : `${r.missed} gate${r.missed > 1 ? 's' : ''} missed (+${added} s)`,
     success: !r.crashed,
     metrics: [
       { label: 'Flight time', value: formatTime(r.time), score: Math.min(1, r.par / Math.max(r.time, 1)) },
-      { label: 'Gates', value: `${passed} / ${r.gates}`, score: passed / r.gates },
-      { label: 'Penalties', value: `+${r.missed * r.penaltyPerMiss} s`, score: r.missed === 0 ? 1 : Math.max(0, 1 - r.missed / 4) },
+      // the rings (the splash lanes have their own line)
+      { label: 'Gates', value: `${passed - (r.splashes?.done ?? 0)} / ${r.gates - (r.splashes?.total ?? 0)}`, score: (passed - (r.splashes?.done ?? 0)) / Math.max(1, r.gates - (r.splashes?.total ?? 0)) },
+      ...(r.splashes ? [{ label: 'Splashes', value: `${r.splashes.done} / ${r.splashes.total}`, score: r.splashes.done / Math.max(r.splashes.total, 1) }] : []),
+      { label: 'Penalties', value: `+${added} s`, score: added === 0 ? 1 : Math.max(0, 1 - added / 20) },
       { label: 'Par', value: formatTime(r.par), score: Math.min(1, r.par / Math.max(total, 1)) },
     ],
   };

@@ -36,7 +36,7 @@ not part of this repository.
 - URL flags: `?q=low|medium|high`, `?t=dawn|day|golden|dusk|night|<hours>`, `?mode=free|rings|landing`
   with `&start=runway|water|air` (skips the menu; `&strip=coastal|mountain|north|east|south` picks the
   strip, `&water=x,z,heading` the spot on the water and `&air=x,y,z,heading` the one in the air, else
-  they are random; `&course=fjord|summits|islands|gorge|mail` the ring run's circuit, else Fjordruta),
+  they are random; `&course=fjord|summits|islands|gorge|splash|mail` the ring run's circuit, else Fjordruta),
   `?model=arcade|assisted|simulation`, `?noui`, `?nohud`, `?debug` (test API on `window.__icarus`),
   `?cam=x,y,z,yaw,pitch`, `?force=nowebgl2|nofloat|logdepth|noatlas`.
 - Preferences (mode, start, time, model, quality, sliders, map on/off) persist in `localStorage`.
@@ -93,7 +93,7 @@ Menu: Enter flies; Esc on the results card goes back to the menu.
   the path: Vatne from 3 km, Hjelle from 2.2 km (past a ridge 2.6 km out). Graded on sink rate,
   centreline, touchdown point (from the aim point), wings level and stopping on the strip. A crash or
   overrun is an F.
-- Ring run: 14 gates against the clock on one of five circuits, picked in a pane beside the menu (on a
+- Ring run: gates against the clock on one of six circuits (each has its own count), picked in a pane beside the menu (on a
   phone it covers the menu, with a Back button), each tile a chart of its course. A missed gate costs
   5 s. Graded on time against the circuit's par.
   - Best runs: each circuit's best successful run (no crash; on the mail run, landed on the strip) is
@@ -117,6 +117,14 @@ Menu: Enter flies; Esc on the results card goes back to the menu.
     to its mouth on the southern fjord. The gorge is 500–900 m wide between walls 600–870 m high; the
     gates weave 60 m either side of its middle, 620 m apart, 55–65 m over the water after the first
     two drop into it from the head. The shortest circuit, and the tightest.
+  - Plaskruta (par 6:13): up the eastern half of the main fjord from the junction toward Botn, where
+    the water is sheltered (a quarter of the open sea's waves): 11 rings 50–60 m over the water,
+    weaving 120 m either side of its middle, and 3 splash lanes, 700 m long and 60 m wide between two
+    rows of buoys. In a lane the floats touch down (gear up), and the aircraft takes off again before
+    its far end. A lane missed (no touchdown in it) costs 10 s, still on the water at its far end 5 s,
+    a touchdown harder than 600 fpm 5 s; gear down on the water flips the aircraft. The par allows
+    30 s for each lane (slowing down, the touchdown, speeding up again). The HUD points at a lane's
+    near end (SPLASH), then once touched down at its far end (GO).
   - Postruta (par 7:12), the mail run: it starts on the Hestskar mountain strip (798 m), taking off
     along 240°, and ends with a landing on the Vatne lake strip (95 m). The gates go down across the
     main fjord's mouth and the coastal plain past Vika, over the bay, along the peninsula's west coast,
@@ -232,7 +240,7 @@ grow on a strip, within 35 m of it or 250 m past its ends.
   - lowest contact point never more than the tyre compression (≤ 0.16 m) below the drawn surface
 - Modes:
   - autopilot ring runs 14/14: Fjordruta (B, 5:20.1), Tinderunden (A, 5:38.7), Holmeleia (B, 5:53.3),
-    Gjelet (B, 3:12.0); the mail run Postruta from take-off to landing (A, 7:13.0, landing 81); in the
+    Gjelet (B, 3:12.0), Plaskruta (A, 6:31.6, three splashes at 156–169 fpm); the mail run Postruta from take-off to landing (A, 7:13.0, landing 81); in the
     unit tests the autopilot also flies each one clean with each flight model, in 4 and 10 m/s winds
     (Postruta lands in 6 m/s straight across the strip rather than 10)
   - the first clean run on a circuit is kept as its best (the results card says so), a slower one

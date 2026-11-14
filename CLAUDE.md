@@ -46,9 +46,10 @@ live in NOTES.md; keep them current when behaviour changes.
   test (`tests/flight.test.ts`), and append (scripts pin index 0 and 1, Vika and Hestskar, as the classic
   runway start and landing). The landing mode flies in along the strip's heading from `approachStart()`
   (`src/sim/scenarios.ts`): `tests/landing.test.ts` checks the final is clear and lands on it.
-- Ring-run circuits are `COURSES` in `src/game/course.ts` (the menu's circuit pane lists them). A new one
-  needs the course tests (`tests/game.test.ts`: spacing, climbs under 8 %, clearance, the autopilot
-  flying it clean with each model) and room on the first map (`tests/chart.test.ts`).
+- Ring-run circuits are `COURSES` in `src/game/course.ts` (the menu's circuit pane lists them), with any
+  number of gates; a gate can be a splash lane (`lane`), and a course a mail run (`mail`). A new one
+  needs the course tests (`tests/game.test.ts`: spacing, climbs under 8 %, clearance, lanes on deep
+  water, the autopilot flying it clean with each model) and room on the first map (`tests/chart.test.ts`).
 - Free flights on the water and in the air start at random spots (`src/world/waterStart.ts`,
   `src/world/airStart.ts`), checked on the CPU terrain. The water checks assume a lift-off within 700 m
   and seas no rougher than `MAX_SEA`: retune them with the flight model or the waves (the tests fly

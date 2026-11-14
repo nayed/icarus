@@ -60,10 +60,10 @@ and its instrument panel, even the engine sound. There are no models, textures o
   wind, or in the air, most often flying down a valley or a fjord.
 - **Landing**: a final approach to a random airstrip, graded on sink rate, centreline, touchdown point,
   wings level and rollout.
-- **Ring run**: fourteen gates against the clock, on one of five circuits: down the fjord, low over the
-  water; round the highest summit, through its passes, 3,300 feet up; round the big island off
-  the coast, through the sounds, low over the open sea; down a narrow gorge, weaving between its walls;
-  or the mail run, from the mountain strip down to the lakes, ending with a landing graded with the
+- **Ring run**: gates against the clock, on one of six circuits: down the fjord, low over the water;
+  round the highest summit, through its passes, 3,300 feet up; round the big island off the coast,
+  through the sounds, low over the open sea; down a narrow gorge, weaving between its walls; up the
+  fjord with three splash lanes to touch the floats down in and take off again; or the mail run, from the mountain strip down to the lakes, ending with a landing graded with the
   time. Your best run on each one is kept in your browser.
 
 <p>

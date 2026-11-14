@@ -107,7 +107,7 @@ export function drawStrips(c: CanvasRenderingContext2D, v: ChartView, highlight 
   c.restore();
 }
 
-/** The ring-run course: gates still to fly as bars across the flight path, the next one ringed. */
+/** The ring-run course: gates still to fly as bars across the flight path (splash lanes as strips along it), the next one ringed. */
 export function drawGates(c: CanvasRenderingContext2D, v: ChartView, gates: readonly Gate[], states: readonly number[], labels = false): void {
   c.save();
   // the course still to fly, dashed
@@ -134,6 +134,18 @@ export function drawGates(c: CanvasRenderingContext2D, v: ChartView, gates: read
     c.save();
     c.translate(x, y);
     c.rotate(screenAngle(v, Math.atan2(g.nx, -g.nz)));
+    if (g.lane) {
+      // a splash lane: the stretch of water, along the flight path
+      const len = Math.max(8, g.lane.half * v.scale);
+      const w = Math.max(1.5, g.lane.halfWidth * v.scale);
+      c.fillStyle = 'rgba(6,8,11,0.7)';
+      c.fillRect(-w - 1.5, -len - 1.5, 2 * w + 3, 2 * len + 3);
+      c.fillStyle = st === 1 ? ACC : st === 3 ? `rgba(${ALERT_RGB},0.8)` : INK;
+      c.fillRect(-w, -len, 2 * w, 2 * len);
+      c.restore();
+      if (labels) label(c, `S${gates.slice(0, k + 1).filter((q) => q.lane).length}`, x + w + 12, y, 12, st === 1 ? ACC : INK);
+      return;
+    }
     c.beginPath();
     c.moveTo(-half, 0);
     c.lineTo(half, 0);

@@ -7,7 +7,7 @@ import type { ModeResult } from '../game/grading.ts';
 import { formatTime } from '../game/grading.ts';
 import { actionLabel, keyLabel, type Action } from '../input/controls.ts';
 import { courseDef, type CourseId } from '../game/course.ts';
-import { CoursePane, parLabel } from './coursePane.ts';
+import { CoursePane, courseContents, parLabel } from './coursePane.ts';
 import { toggleFullscreen } from '../app.ts';
 import { prefs, savePrefs, type MenuMode, type Prefs } from './prefs.ts';
 import { PauseMap } from './pauseMap.ts';
@@ -17,7 +17,7 @@ const MODE_INFO: Record<MenuMode, { t: string; d: (p: Prefs) => string }> = {
   landing: { t: 'Landing', d: () => 'A final approach to a random airstrip. Graded on the touchdown.' },
   rings: {
     t: 'Ring run',
-    d: (p) => `Fourteen gates against the clock, on ${courseDef(p.course).name}${courseDef(p.course).mail ? ', then a landing' : ''}. Par ${parLabel(p.course)}.`,
+    d: (p) => `Against the clock on ${courseDef(p.course).name}: ${courseContents(p.course)}. Par ${parLabel(p.course)}.`,
   },
 };
 const MODEL_INFO: Record<FlightModel, string> = {

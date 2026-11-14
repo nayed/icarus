@@ -50,9 +50,9 @@ for (const [w, h, tag] of [[1920, 1080, 'desktop'], [390, 844, 'phone']]) {
     await page.click('.card[data-mode="rings"]');
     await sleep(500);
     const bests = await page.evaluate(() => [...document.querySelectorAll('.course-card [data-best]')].map((b) => b.textContent));
-    check(bests.join('|') === '||Best 5:01.50 · A||', `the tiles show the best runs kept: ${JSON.stringify(bests)}`);
+    check(bests.join('|') === '||Best 5:01.50 · A|||', `the tiles show the best runs kept: ${JSON.stringify(bests)}`);
     let cp = await pane(page);
-    check(cp.on && cp.tiles === 5 && cp.sel === 'fjord', `choosing Ring run shows the circuits beside the menu (${JSON.stringify(cp)})`);
+    check(cp.on && cp.tiles === 6 && cp.sel === 'fjord', `choosing Ring run shows the circuits beside the menu (${JSON.stringify(cp)})`);
     await page.click('.course-card[data-course="summits"]');
     await sleep(400);
     cp = await pane(page);
@@ -156,7 +156,7 @@ for (const [w, h, tag] of [[1920, 1080, 'desktop'], [390, 844, 'phone']]) {
     await page.click('.card[data-mode="rings"]');
     await sleep(500);
     let cp = await pane(page);
-    check(cp.on && cp.tiles === 5, `phone: Ring run opens the circuits over the menu (${JSON.stringify(cp)})`);
+    check(cp.on && cp.tiles === 6, `phone: Ring run opens the circuits over the menu (${JSON.stringify(cp)})`);
     await shot(page, `ui-${tag}-circuits`);
     await page.click('[data-act="courses-back"]');
     await sleep(500);

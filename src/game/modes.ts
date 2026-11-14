@@ -1,7 +1,8 @@
 // Game modes: free flight, the fjord ring run and the graded landing.
 import * as THREE from 'three';
 import type { App, StartPoint } from '../app.ts';
-import { buildCourse, courseDef, coursePar, courseStart, parFor, stripIndex, type Gate } from './course.ts';
+import { buildCourse, courseDef, coursePar, courseStart, gateEnds, parFor, stripIndex, type Gate } from './course.ts';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { gradeLanding, gradeMail, gradeRings, formatTime, type LandingInput, type ModeResult } from './grading.ts';
 import type { Touchdown, PilotInput } from '../sim/aircraft.ts';
 import { Autopilot } from '../sim/autopilot.ts';
@@ -165,6 +166,23 @@ void main() {
  * `mail`) starts on a runway instead, and its clock runs on past the last gate to the touchdown on the
  * strip at the other end, graded with the landing.
  */
+/** A splash touchdown harder than this (fpm) costs 5 s. */
+const HARD_SPLASH = 600;
+
+/**
+ * A splash lane's buoys, in the lane's frame (z along it, x across): a row along each side every 50 m,
+ * and a pair at each end on the middle line's sides, floating at the water.
+ */
+function laneBuoys(lane: { half: number; halfWidth: number }): THREE.BufferGeometry {
+  const parts: THREE.BufferGeometry[] = [];
+  const buoy = (x: number, z: number, r: number) => parts.push(new THREE.SphereGeometry(r, 10, 7).translate(x, r * 0.35, z));
+  for (let z = -lane.half; z <= lane.half + 0.1; z += 50) for (const x of [-lane.halfWidth, lane.halfWidth]) buoy(x, z, 1.3);
+  for (const z of [-lane.half, lane.half]) for (const x of [-lane.halfWidth / 2, lane.halfWidth / 2]) buoy(x, z, 1.8);
+  const geo = mergeGeometries(parts, false);
+  for (const p of parts) p.dispose();
+  return geo;
+}
+
 export class RingRun extends GameMode {
   readonly kind = 'rings' as const;
   readonly course = courseDef(this.app.course);
@@ -184,6 +202,11 @@ export class RingRun extends GameMode {
   /** a mail run: when it passed the last gate, and how long it has been at rest on the ground before that */
   private lastGateAt = -1;
   private restingFor = 0;
+  /** splash lanes: how many there are and were touched in, each one's touchdown, and the seconds added */
+  readonly lanes = this.gates.filter((g) => g.lane).length;
+  splashes = 0;
+  extra = 0;
+  private readonly laneTouch = new Map<number, Touchdown>();
   splits: number[] = [];
   private readonly group = new THREE.Group();
   private readonly mats: THREE.ShaderMaterial[] = [];
@@ -211,6 +234,7 @@ export class RingRun extends GameMode {
       ac.reset(s.x, s.y, s.z, s.heading, 47);
       this.app.controls.reset(0.72, false, 0);
       this.app.startFlightAt();
+      if (this.lanes) ac.onTouchdown = (t) => this.splash(t);
     }
     this.prev.copy(ac.pos);
     this.states = this.gates.map((_, i) => (i === 0 ? 1 : 0));
@@ -225,9 +249,9 @@ export class RingRun extends GameMode {
         uniforms: { ...globals, uState: { value: this.states[i] }, uPulse: { value: 0 } },
         defines: ldr ? { LDR_OUTPUT: '' } : {},
       });
-      const m = new THREE.Mesh(geo, mat);
+      const m = new THREE.Mesh(g.lane ? laneBuoys(g.lane) : geo, mat);
       m.position.set(g.x, g.y, g.z);
-      // torus lies in the xy plane: face it along the flight direction
+      // torus lies in the xy plane, a lane's buoys along z: face it along the flight direction
       m.lookAt(g.x + g.nx, g.y, g.z + g.nz);
       m.frustumCulled = false;
       m.layers.enable(1);
@@ -236,18 +260,40 @@ export class RingRun extends GameMode {
     }
     this.app.world.scene.add(this.group);
     if (this.mail) this.say(`The mail for ${STRIPS[this.mail.to].name.split(' ')[0]}. Take off, fly the ${this.gates.length} gates, then land on the ${STRIPS[this.mail.to].name}.`, 'info', 7);
+    else if (this.lanes) this.say(`Fly through all ${this.gates.length - this.lanes} gates and touch down in the ${this.lanes} splash lanes: gear up, floats down between the buoys, and go again. Par ${formatTime(this.par)}.`, 'info', 8);
     else this.say(`Fly through all ${this.gates.length} gates. Par ${formatTime(this.par)}.`, 'info', 5);
+  }
+
+  /** The splash lane's number (from 1) of gate i. */
+  private laneNumber(i: number): number {
+    return this.gates.slice(0, i + 1).filter((g) => g.lane).length;
+  }
+
+  /** A touchdown on the water inside one of the next lanes counts for it (the first one in it). */
+  private splash(t: Touchdown): void {
+    if (!t.onWater) return;
+    for (let j = this.next; j < Math.min(this.gates.length, this.next + 3); j++) {
+      const g = this.gates[j];
+      if (!g.lane || this.laneTouch.has(j)) continue;
+      const along = (t.x - g.x) * g.nx + (t.z - g.z) * g.nz;
+      const across = (t.x - g.x) * -g.nz + (t.z - g.z) * g.nx;
+      if (Math.abs(along) > g.lane.half || Math.abs(across) > g.lane.halfWidth) continue;
+      this.laneTouch.set(j, t);
+      const fpm = Math.round(t.sinkRate * 196.85);
+      this.say(`Splash ${this.laneNumber(j)} · ${fpm} fpm${t.gearDown ? ' · GEAR DOWN' : ''}`, fpm < 350 ? 'good' : fpm < HARD_SPLASH ? 'info' : 'warn', 2.5);
+      return;
+    }
   }
 
   override end(): void {
     this.app.world.scene.remove(this.group);
     for (const m of this.mats) m.dispose();
-    (this.group.children[0] as THREE.Mesh | undefined)?.geometry.dispose();
+    for (const geo of new Set(this.group.children.map((m) => (m as THREE.Mesh).geometry))) geo.dispose();
   }
 
-  /** Signed distance of p to the gate plane (+ = beyond the gate). */
+  /** Signed distance of p to the gate plane, or a lane's far end (+ = beyond it). */
   private side(g: Gate, p: THREE.Vector3): number {
-    return (p.x - g.x) * g.nx + (p.z - g.z) * g.nz;
+    return (p.x - g.x) * g.nx + (p.z - g.z) * g.nz - (g.lane?.half ?? 0);
   }
 
   override simStep(dt: number): void {
@@ -282,6 +328,19 @@ export class RingRun extends GameMode {
         const x = this.prev.x + (p.x - this.prev.x) * t;
         const y = this.prev.y + (p.y - this.prev.y) * t;
         const z = this.prev.z + (p.z - this.prev.z) * t;
+        if (g.lane) {
+          // a lane is passed at its far end once touched down in, and missed there if not
+          const across = Math.abs((x - g.x) * -g.nz + (z - g.z) * g.nx);
+          if (this.laneTouch.has(j)) {
+            for (let k = this.next; k < j; k++) this.miss(k);
+            this.pass(j);
+            break;
+          } else if (j === this.next && across < g.lane.halfWidth * 6) {
+            this.miss(j);
+            break;
+          }
+          continue;
+        }
         const r = Math.hypot(x - g.x, y - g.y, z - g.z);
         if (r <= g.radius) {
           for (let k = this.next; k < j; k++) this.miss(k);
@@ -304,11 +363,22 @@ export class RingRun extends GameMode {
     this.next = i + 1;
     if (i > 0) this.splits.push(now - this.startTime);
     this.app.audio.chime();
+    const touch = this.laneTouch.get(i);
+    if (touch) {
+      // a splash: still on the water at the lane's end, or a hard touchdown, costs time
+      this.splashes++;
+      const long = this.app.ac.keelInWater > 0;
+      const hard = touch.sinkRate * 196.85 > HARD_SPLASH;
+      this.extra += (long ? 5 : 0) + (hard ? 5 : 0);
+      const how = [long && 'ran long +5 s', hard && 'hard +5 s'].filter(Boolean).join(' · ');
+      this.say(`Splash ${this.laneNumber(i)} · ${how || 'clean'}`, how ? 'warn' : 'good', 2.5);
+    }
     if (this.next < this.gates.length) {
       this.states[this.next] = 1;
       const ghost = (this.gatesPar * i) / (this.gates.length - 1);
       const delta = now - this.startTime - ghost;
-      if (i > 0) this.say(`Gate ${i + 1} · ${delta >= 0 ? '+' : '−'}${Math.abs(delta).toFixed(1)} s`, delta <= 0 ? 'good' : 'info', 2);
+      if (this.gates[this.next].lane) this.say('Splash lane ahead: gear up, touch down between the buoys, then go again.', 'info', 4);
+      else if (i > 0 && !touch) this.say(`Gate ${i + 1} · ${delta >= 0 ? '+' : '−'}${Math.abs(delta).toFixed(1)} s`, delta <= 0 ? 'good' : 'info', 2);
     } else this.lastGate();
   }
 
@@ -319,7 +389,9 @@ export class RingRun extends GameMode {
     this.fade[i] = 0;
     this.missed++;
     this.next = i + 1;
-    this.say(`Missed gate ${i + 1} · +${this.penalty} s`, 'warn', 2.5);
+    // a lane missed costs twice a gate
+    if (this.gates[i].lane) this.extra += this.penalty;
+    this.say(this.gates[i].lane ? `Missed splash ${this.laneNumber(i)} · +${this.penalty * 2} s` : `Missed gate ${i + 1} · +${this.penalty} s`, 'warn', 2.5);
     this.app.audio.motor(0.25);
     if (this.next < this.gates.length) this.states[this.next] = 1;
     else this.lastGate();
@@ -345,6 +417,8 @@ export class RingRun extends GameMode {
       time,
       missed: this.missed + this.gates.length - this.next,
       penaltyPerMiss: this.penalty,
+      extra: this.extra + this.penalty * this.gates.slice(this.next).filter((g) => g.lane).length,
+      splashes: this.lanes ? { done: this.splashes, total: this.lanes } : undefined,
       par: this.par,
       gates: this.gates.length,
       crashed,
@@ -353,7 +427,7 @@ export class RingRun extends GameMode {
     };
     const r = this.watch ? gradeMail({ rings, landing: this.watch.input() }) : gradeRings(rings);
     // the circuit's best run in this browser: this one, if it beats it
-    const seconds = time + rings.missed * this.penalty;
+    const seconds = time + rings.missed * this.penalty + rings.extra;
     const isNew = recordRun(this.course.id, { score: r.score, grade: r.grade, seconds, model: this.app.settings.model }, r.success);
     const best = bestRun(this.course.id);
     if (best) r.best = { seconds: best.seconds, grade: best.grade, isNew };
@@ -361,7 +435,7 @@ export class RingRun extends GameMode {
   }
 
   override frame(dt: number): void {
-    if (this.watch) this.gearAdvice();
+    if (this.watch || this.lanes) this.gearAdvice();
     this.pulse = (this.pulse + dt * 2.2) % (Math.PI * 2);
     this.mats.forEach((m, i) => {
       m.uniforms.uState.value = this.states[i];
@@ -371,7 +445,7 @@ export class RingRun extends GameMode {
       if (this.fade[i] >= 0) {
         this.fade[i] += dt;
         const k = Math.max(0, 1 - this.fade[i] / 0.7);
-        mesh.scale.setScalar(this.states[i] === 2 ? 1 + 0.35 * (1 - k) : 1);
+        if (!this.gates[i].lane) mesh.scale.setScalar(this.states[i] === 2 ? 1 + 0.35 * (1 - k) : 1);
         mesh.visible = k > 0;
         m.uniforms.uPulse.value = k;
       }
@@ -384,13 +458,18 @@ export class RingRun extends GameMode {
     const landing = !!this.watch && this.next >= this.gates.length;
     const h: ModeHud = {
       title: `Ring run · ${this.course.name}`,
-      timer: formatTime(elapsed + this.missed * this.penalty),
+      timer: formatTime(elapsed + this.missed * this.penalty + this.extra),
       timerSub: landing ? `Land on ${this.watch!.strip.name.split(' ')[0]}${this.missed ? ` · ${this.missed} missed` : ''}` : `Gate ${Math.min(this.next + 1, this.gates.length)} / ${this.gates.length}${this.missed ? ` · ${this.missed} missed` : ''}`,
       map: { gates: this.gates, gateStates: this.states, strip: this.mail?.to },
       ...this.currentPrompt(),
     };
     const g = this.gates[this.next];
-    if (g && !this.result) h.target = { label: `${this.next + 1}`, ...this.aim(g.x, g.y, g.z) };
+    if (g?.lane && !this.result) {
+      // a splash lane: its near end until touched down in, then its far end, to be off the water by
+      const touched = this.laneTouch.has(this.next);
+      const e = touched ? gateEnds(g).exit : gateEnds(g).entry;
+      h.target = { label: touched ? 'GO' : 'SPLASH', ...this.aim(e.x, 1, e.z) };
+    } else if (g && !this.result) h.target = { label: `${this.next + 1}`, ...this.aim(g.x, g.y, g.z) };
     if (landing && !this.result) Object.assign(h, this.watch!.hud(this.aimAt));
     return h;
   }

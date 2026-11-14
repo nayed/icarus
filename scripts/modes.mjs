@@ -81,6 +81,21 @@ r = await waitResult(240000, async () => {
 });
 check(r && r.success && r.title === 'Gjelet' && r.metrics[1].value === '14 / 14' && minAgl > 30, `clean run, never below ${minAgl.toFixed(0)} m: ${r ? `${r.title} ${r.grade} ${r.headline} (${r.subtitle}) — ${metrics(r)}` : 'no result'}`);
 
+console.log('\n== ring run on Plaskruta, with three splash lanes, autopilot');
+await open('rings', '&course=splash');
+await page.evaluate(() => window.__icarus.session.autoRings(0));
+shots = 0;
+const splashes = [];
+r = await waitResult(300000, async () => {
+  const h = await page.evaluate(() => window.__icarus.session.hud());
+  if (h.prompt?.startsWith('Splash') && !splashes.includes(h.prompt)) splashes.push(h.prompt);
+  if (shots === 0 && h.target?.label === 'SPLASH' && h.target.dist < 450) { shots++; await shot(page, 'mode-splash-lane'); }
+  else if (shots === 1 && splashes.some((p) => p.includes('fpm'))) { shots++; await shot(page, 'mode-splash-touch'); }
+});
+const splashLine = r?.metrics.find((m) => m.label === 'Splashes')?.value;
+check(r && r.success && r.title === 'Plaskruta' && r.metrics[1].value === '11 / 11' && splashLine === '3 / 3', `clean run: ${r ? `${r.title} ${r.grade} ${r.headline} (${r.subtitle}) — ${metrics(r)}` : 'no result'}`);
+check(splashes.filter((p) => p.includes('fpm')).length === 3, `three splashes called out: ${splashes.join(' / ')}`);
+
 console.log('\n== mail run on Postruta: take off from Hestskar, the gates, land on Vatne, autopilot');
 await open('rings', '&course=mail');
 hud = await page.evaluate(() => window.__icarus.session.hud());

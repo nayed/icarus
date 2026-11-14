@@ -12,6 +12,14 @@ import { MUTED } from './palette.ts';
 /** room around a course on its tile (m) */
 const PAD = 900;
 
+/** "14 gates", "11 gates + 3 splashes", "14 gates + landing". */
+export function courseContents(id: CourseId): string {
+  const gates = buildCourse(id);
+  const lanes = gates.filter((g) => g.lane).length;
+  const mail = COURSES.find((c) => c.id === id)?.mail;
+  return `${gates.length - lanes} gates${lanes ? ` + ${lanes} splashes` : ''}${mail ? ' + landing' : ''}`;
+}
+
 export function parLabel(id: CourseId): string {
   return formatTime(parFor(id)).replace(/\.00$/, '');
 }
@@ -25,7 +33,7 @@ export class CoursePane {
     this.grid = el.querySelector('[data-course-grid]') as HTMLElement;
     this.note = el.querySelector('[data-course-note]') as HTMLElement;
     this.grid.innerHTML = COURSES.map(
-      (c) => `<button type="button" class="course-card" data-course="${c.id}" aria-pressed="false"><canvas aria-hidden="true"></canvas><span class="cap"><span class="t">${c.name}</span><span class="d">${buildCourse(c.id).length} gates${c.mail ? ' + landing' : ''} · par ${parLabel(c.id)}</span><span class="b" data-best></span></span></button>`,
+      (c) => `<button type="button" class="course-card" data-course="${c.id}" aria-pressed="false"><canvas aria-hidden="true"></canvas><span class="cap"><span class="t">${c.name}</span><span class="d">${courseContents(c.id)} · par ${parLabel(c.id)}</span><span class="b" data-best></span></span></button>`,
     ).join('');
   }
 

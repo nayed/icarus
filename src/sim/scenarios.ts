@@ -408,7 +408,12 @@ export interface RingGate {
   nx: number;
   nz: number;
   radius: number;
+  /** a splash lane: touched down in on the water, `half` m either side of (x, z) along (nx, nz) */
+  lane?: { half: number; halfWidth: number };
 }
+
+/** Where the autopilot aims to touch down in a splash lane: this far past its near end (m). */
+const SPLASH_AIM = 230;
 
 /**
  * The autopilot's way through the next gate, coming from `from` (the gate before, or the start):
@@ -451,14 +456,17 @@ export interface MailLegs {
  * here and by the in-browser hook.
  */
 export class RingPilot {
-  phase: 'takeoff' | 'gates' | 'landing';
+  /** off the strip, through the gates, onto a splash lane's water and off it again, onto the strip */
+  phase: 'takeoff' | 'gates' | 'splash' | 'goagain' | 'landing';
   readonly approach: ApproachController | null;
   private readonly ap = new Autopilot();
   private readonly wind = new THREE.Vector3();
   private readonly gates: readonly RingGate[];
   private readonly start: { x: number; y: number; z: number };
-  private readonly departure: number;
+  private departure: number;
   private readonly cut: number;
+  /** the splash lane being flown (index into gates) */
+  private lane = -1;
 
   constructor(gates: readonly RingGate[], start: { x: number; y: number; z: number }, mail: MailLegs | null = null, cut = 0) {
     this.gates = gates;
@@ -469,20 +477,22 @@ export class RingPilot {
     this.approach = mail ? new ApproachController(STRIPS[mail.to], false, landingAim(STRIPS[mail.to]) + 10) : null;
   }
 
-  /** Touchdowns count once the landing has begun (not the wheels leaving the strip at the start). */
+  /** Touchdowns: a splash lane's (then off again), or the landing's once it has begun (not the wheels leaving the strip at the start). */
   onTouchdown(t: Touchdown): void {
-    if (this.phase === 'landing') this.approach?.onTouchdown(t);
+    if (this.phase === 'splash' && t.onWater) this.phase = 'goagain';
+    else if (this.phase === 'landing') this.approach?.onTouchdown(t);
   }
 
   update(ac: Aircraft, env: WorldEnv, inp: PilotInput, dt: number, next: number): void {
     const t = ac.telemetry(env);
-    if (this.phase === 'takeoff') {
-      // full power and 8° of pitch once flying speed is near, wings level, along the departure
-      Object.assign(inp, { throttle: 1, flapNotch: 1, gearDown: true, brake: 0 });
+    if (this.phase === 'takeoff' || this.phase === 'goagain') {
+      // full power and 8° of pitch once flying speed is near, wings level, along the departure (off
+      // the water: gear up, along the lane)
+      Object.assign(inp, { throttle: 1, flapNotch: 1, gearDown: this.phase === 'takeoff', brake: 0 });
       inp.pitch = t.ias > 27 ? clamp((8 - t.pitch) * 0.1 - ac.omega.x * 0.5, -0.3, 0.6) : 0;
       inp.roll = clamp(-t.bank * 0.05 + ac.omega.z * 0.4, -1, 1);
       inp.yaw = clamp((((this.departure - t.heading + 540) % 360) - 180) * 0.08 + ac.beta * 1.5, -1, 1);
-      if (t.agl < 40) return;
+      if (t.agl < (this.phase === 'takeoff' ? 40 : 15)) return;
       this.phase = 'gates';
       inp.flapNotch = 0;
     }
@@ -493,9 +503,33 @@ export class RingPilot {
       return;
     }
     const n = Math.min(next, this.gates.length - 1);
+    // a splash lane next: down onto its water, gear up (until the mode has moved past it)
+    if (this.phase === 'gates' && this.gates[n].lane && this.lane !== n) {
+      this.lane = n;
+      this.departure = ((Math.atan2(this.gates[n].nx, -this.gates[n].nz) * 180) / Math.PI + 360) % 360;
+      this.phase = 'splash';
+    }
     const w = env.wind(ac.pos.x, ac.pos.y, ac.pos.z, ac.time, this.wind);
+    if (this.phase === 'splash') {
+      if (next > this.lane) this.phase = 'gates';
+      else {
+        // onto the lane's line, down a 3.5° path to the aim point, then settling onto the water at
+        // 0.8 m/s with power on (a touch-and-go needs no flare to a stop)
+        const g = this.gates[n];
+        const along = (ac.pos.x - g.x) * g.nx + (ac.pos.z - g.z) * g.nz;
+        const toAim = -g.lane!.half + SPLASH_AIM - along;
+        const gs = Math.tan((3.5 * Math.PI) / 180);
+        const vs = t.agl > 10 ? -31 * gs + clamp((Math.max(toAim, 0) * gs - t.agl) * 0.25, -2, 2) : -0.8;
+        Object.assign(inp, { flapNotch: 2, gearDown: false });
+        this.ap.update(ac, { heading: ringSteer(ac, g, g, 0, w).heading, vs, speed: 31, maxBank: 20 }, t.ias, dt, inp);
+        return;
+      }
+    }
+    // slowed down, with a notch of flap, through the ring before a splash lane
+    const slow = !!this.gates[n + 1]?.lane;
+    inp.flapNotch = slow ? 1 : 0;
     const s = ringSteer(ac, n ? this.gates[n - 1] : this.start, this.gates[n], this.cut, w);
-    this.ap.update(ac, { ...s, speed: 46, maxBank: 45 }, t.ias, dt, inp);
+    this.ap.update(ac, { ...s, speed: slow ? 36 : 46, maxBank: slow ? 30 : 45 }, t.ias, dt, inp);
   }
 }
 
@@ -503,10 +537,12 @@ export class RingPilot {
  * The autopilot flies a ring course, gate by gate, counting a gate passed when the aircraft crosses
  * its plane inside the ring; `misses` are the gates missed (numbered from 1), `worst` the furthest
  * from a gate's centre it crossed (m), `minAgl` the lowest it flew between the first gate and the
- * last. A circuit starts from `start` as the ring run places it (47 m/s, 72 % power, gear up, flaps
+ * last (not counting the splash lanes); `splashes` are the lanes touched down in, `long` those still
+ * on the water at their end, `hardest` the hardest of those touchdowns (fpm). A circuit starts from
+ * `start` as the ring run places it (47 m/s, 72 % power, gear up, flaps
  * up); a mail run on the runway of `mail.from` instead, and ends with the landing on `mail.to`.
  */
-export function ringRun(model: FlightModel, gates: readonly RingGate[], start: { x: number; y: number; z: number; heading: number }, wind = { from: 40, speed: 4 }, mail: MailLegs | null = null): { passed: number; missed: number; misses: number[]; worst: number; seconds: number; minAgl: number; crashed: boolean; crashReason: string; landing: ApproachResult | null } {
+export function ringRun(model: FlightModel, gates: readonly RingGate[], start: { x: number; y: number; z: number; heading: number }, wind = { from: 40, speed: 4 }, mail: MailLegs | null = null): { passed: number; missed: number; misses: number[]; worst: number; seconds: number; minAgl: number; splashes: number; long: number; hardest: number; crashed: boolean; crashReason: string; landing: ApproachResult | null } {
   const r = makeRig(model);
   r.env.setWind(wind.from, wind.speed);
   if (mail) {
@@ -519,14 +555,26 @@ export function ringRun(model: FlightModel, gates: readonly RingGate[], start: {
     Object.assign(r.inp, { throttle: 0.72, gearDown: false, flapNotch: 0 });
   }
   const pilot = new RingPilot(gates, mail ? { x: r.ac.pos.x, y: STRIPS[mail.from].elevation + 40, z: r.ac.pos.z } : start, mail);
-  r.ac.onTouchdown = (t) => pilot.onTouchdown(t);
+  // a splash lane counts when touched down in on the water, then passed at its far end
+  const touched = new Map<number, Touchdown>();
+  let splashes = 0;
+  let long = 0;
   let next = 0;
+  r.ac.onTouchdown = (t) => {
+    const g = gates[next];
+    if (g?.lane && t.onWater && !touched.has(next)) {
+      const along = (t.x - g.x) * g.nx + (t.z - g.z) * g.nz;
+      const across = (t.x - g.x) * -g.nz + (t.z - g.z) * g.nx;
+      if (Math.abs(along) <= g.lane.half && Math.abs(across) <= g.lane.halfWidth) touched.set(next, t);
+    }
+    pilot.onTouchdown(t);
+  };
   let passed = 0;
   let minAgl = Infinity;
   let worst = 0;
   const misses: number[] = [];
   const prev = r.ac.pos.clone();
-  const side = (g: RingGate, p: THREE.Vector3) => (p.x - g.x) * g.nx + (p.z - g.z) * g.nz;
+  const side = (g: RingGate, p: THREE.Vector3) => (p.x - g.x) * g.nx + (p.z - g.z) * g.nz - (g.lane?.half ?? 0);
   let steps = 0;
   let seconds = 0;
   const limit = Math.round((90 + gates.length * 40 + (mail ? 200 : 0)) / SIM_DT);
@@ -534,12 +582,19 @@ export function ringRun(model: FlightModel, gates: readonly RingGate[], start: {
     if (next >= gates.length && (!mail || (pilot.approach!.touchdown && r.ac.vel.length() < 0.5))) break;
     r.env.follow(r.ac.pos.x, r.ac.pos.z);
     const t = r.ac.telemetry(r.env);
-    if (next > 0 && next < gates.length) minAgl = Math.min(minAgl, t.agl);
+    if (next > 0 && next < gates.length && !gates[next].lane && !gates[next - 1].lane) minAgl = Math.min(minAgl, t.agl);
     pilot.update(r.ac, r.env, r.inp, SIM_DT, next);
     r.ac.step(SIM_DT, r.inp, r.env);
     const p = r.ac.pos;
     const g = gates[next];
-    if (g && side(g, prev) < 0 && side(g, p) >= 0) {
+    if (g?.lane && side(g, prev) < 0 && side(g, p) >= 0) {
+      if (touched.has(next)) {
+        passed++;
+        splashes++;
+        if (r.ac.keelInWater > 0) long++;
+      } else misses.push(next + 1);
+      next++;
+    } else if (g && side(g, prev) < 0 && side(g, p) >= 0) {
       const miss = Math.hypot(p.x - g.x, p.y - g.y, p.z - g.z);
       worst = Math.max(worst, miss);
       if (miss <= g.radius) passed++;
@@ -549,5 +604,6 @@ export function ringRun(model: FlightModel, gates: readonly RingGate[], start: {
     }
     prev.copy(p);
   }
-  return { passed, missed: next - passed, misses, worst, seconds: seconds || steps * SIM_DT, minAgl, crashed: r.ac.crashed, crashReason: r.ac.crashReason, landing: mail ? pilot.approach!.result(r.ac, r.env) : null };
+  const hardest = Math.max(0, ...[...touched.values()].map((t) => t.sinkRate * 196.85));
+  return { passed, missed: next - passed, misses, worst, seconds: seconds || steps * SIM_DT, minAgl, splashes, long, hardest, crashed: r.ac.crashed, crashReason: r.ac.crashReason, landing: mail ? pilot.approach!.result(r.ac, r.env) : null };
 }

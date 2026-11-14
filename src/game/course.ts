@@ -1,10 +1,11 @@
-// The ring-run circuits, 14 gates each (COURSES, in the order the menu shows them). Fjordruta runs down the main fjord and into the north arm,
+// The ring-run circuits (COURSES, in the order the menu shows them). Fjordruta runs down the main fjord and into the north arm,
 // generated from the fjord polylines and recentred on the actual water in each cross-section.
 // Tinderunden goes round the highest summit (1530 m) at 800–1190 m, through the pass and the saddle
 // between it and the ridges around it: placed by hand, each gate as low as the ground under it and
 // the legs to it allow, and no leg climbing more than 7 % (the aircraft climbs at about 11 %).
 // Holmeleia goes round the big island off the coast at 55–70 m over the sea, Gjelet down a narrow
-// gorge and Postruta is a mail run from one strip to another, all placed by hand.
+// gorge, Plaskruta up the main fjord with splash lanes to touch the water in, and Postruta is a mail
+// run from one strip to another, all placed by hand.
 // tests/game.test.ts checks both for clearance and flies them with the autopilot.
 import { FJORDS, SEA_LEVEL, STRIPS, headingDir, type StripDef } from '../world/params.ts';
 import { landingAim } from '../sim/scenarios.ts';
@@ -18,8 +19,24 @@ export interface Gate {
   nx: number;
   nz: number;
   radius: number;
+  /**
+   * A splash lane instead of a ring: water `half` metres either side of (x, z) along (nx, nz) and
+   * `halfWidth` across it, marked by buoys, at the water (y = 0). The floats touch down in it, gear
+   * up, and the aircraft takes off again before it ends.
+   */
+  lane?: { half: number; halfWidth: number };
 }
 
+/** A splash lane's size (m): 700 m long, 60 m wide. */
+export const LANE = { half: 350, halfWidth: 30 };
+
+/** Where a gate is flown into and out of: its middle, or a lane's near and far ends. */
+export function gateEnds(g: Gate): { entry: { x: number; z: number }; exit: { x: number; z: number } } {
+  const h = g.lane?.half ?? 0;
+  return { entry: { x: g.x - g.nx * h, z: g.z - g.nz * h }, exit: { x: g.x + g.nx * h, z: g.z + g.nz * h } };
+}
+
+/** The fjord circuit's gate count (the others have their own). */
 export const GATE_COUNT = 14;
 export const GATE_RADIUS = 22;
 const HEIGHTS = [85, 110, 75, 135, 95, 70, 120, 90, 150, 105, 75, 125, 95, 80];
@@ -67,7 +84,7 @@ export function waterSection(x: number, z: number, nx: number, nz: number): { cx
   return { cx: x + nx * mid, cz: z + nz * mid, width: hi - lo };
 }
 
-export type CourseId = 'fjord' | 'summits' | 'islands' | 'gorge' | 'mail';
+export type CourseId = 'fjord' | 'summits' | 'islands' | 'gorge' | 'splash' | 'mail';
 
 export interface CourseDef {
   id: CourseId;
@@ -86,6 +103,11 @@ export const COURSES: readonly CourseDef[] = [
   { id: 'summits', name: 'Tinderunden', blurb: 'Round the highest summit, through its passes, 3,300 feet up.' },
   { id: 'islands', name: 'Holmeleia', blurb: 'Round the big island off the coast and through the sounds, low over the open sea.' },
   { id: 'gorge', name: 'Gjelet', blurb: 'Down a narrow gorge from its head to the fjord, weaving low between walls 2,300 feet high.' },
+  {
+    id: 'splash',
+    name: 'Plaskruta',
+    blurb: 'Up the main fjord toward Botn, low over the water, with three splash lanes: gear up, touch down between the buoys, and go again.',
+  },
   {
     id: 'mail',
     name: 'Postruta',
@@ -135,6 +157,20 @@ const GORGE_GATES: readonly [number, number, number][] = [
 ];
 
 /**
+ * Plaskruta's gates (x, height, z) and splash lanes (height 0), up the eastern half of the main fjord
+ * from the junction toward Botn, where the water is sheltered (a quarter of the open sea's waves): the
+ * rings weave 120 m either side of the water's middle, 50–60 m over it, lined up with the lanes before
+ * and after them. The water is 900–1300 m wide and 70–100 m deep at the lanes.
+ */
+const SPLASH_GATES: readonly [number, number, number][] = [
+  [9370, 60, 348], [10432, 50, 28], [11602, 0, 46], [12538, 50, 203], [13550, 60, 659], [14648, 50, 843],
+  [15724, 0, 772], [16791, 50, 489], [17636, 60, -77], [18595, 50, -615], [19610, 0, -1072], [20714, 50, -1335],
+  [21764, 60, -1667], [22628, 50, -2223],
+];
+/** which of them are splash lanes */
+const SPLASH_LANES = [2, 6, 10];
+
+/**
  * Postruta's gates (x, height, z), from the Hestskar mountain strip (798 m) to the Vatne lake strip
  * (95 m): down across the main fjord's mouth and the coastal plain past Vika, over the bay, south along
  * the peninsula's west coast and round its tip, across the southern fjord and up the channel to the
@@ -161,16 +197,18 @@ export function landingPoint(i: number): { x: number; z: number } {
 
 /**
  * Gates through the points (x, y, z), each facing along the line from the gate before it to the one
- * after (or to `after` for the last one).
+ * after (or to `after` for the last one); the points at `lanes` are splash lanes.
  */
-function gatesThrough(pts: readonly (readonly [number, number, number])[], after?: { x: number; z: number }): Gate[] {
+function gatesThrough(pts: readonly (readonly [number, number, number])[], after?: { x: number; z: number }, lanes: readonly number[] = []): Gate[] {
   return pts.map(([x, y, z], i) => {
     const a = pts[Math.max(0, i - 1)];
     const b = i === pts.length - 1 && after ? [after.x, 0, after.z] : pts[Math.min(pts.length - 1, i + 1)];
     const dx = b[0] - a[0];
     const dz = b[2] - a[2];
     const l = Math.hypot(dx, dz) || 1;
-    return { x, y, z, nx: dx / l, nz: dz / l, radius: GATE_RADIUS };
+    const g: Gate = { x, y, z, nx: dx / l, nz: dz / l, radius: GATE_RADIUS };
+    if (lanes.includes(i)) g.lane = LANE;
+    return g;
   });
 }
 
@@ -183,6 +221,7 @@ export function buildCourse(id: CourseId = 'fjord'): Gate[] {
       id === 'summits' ? gatesThrough(SUMMIT_GATES)
         : id === 'islands' ? gatesThrough(ISLAND_GATES)
           : id === 'gorge' ? gatesThrough(GORGE_GATES)
+            : id === 'splash' ? gatesThrough(SPLASH_GATES, undefined, SPLASH_LANES)
           : id === 'mail' ? gatesThrough(MAIL_GATES, landingPoint(stripIndex('south')))
             : fjordGates();
     cached.set(id, gates);
@@ -225,7 +264,11 @@ function fjordGates(): Gate[] {
   return gatesThrough(raw.map((g, i) => [g.x, SEA_LEVEL + HEIGHTS[i], g.z] as const));
 }
 
-/** Smallest clearance of the gate rings and of the straight legs between gates above terrain/water. */
+/**
+ * Smallest clearance of the gate rings and of the straight legs between gates above terrain/water.
+ * A leg to or from a splash lane runs from the gate to the lane's near end, or from its far end, down
+ * to the water or up from it: only the land under it counts.
+ */
 export function courseClearance(gates: Gate[]): { ring: number; leg: number; worstGate: number; worstLeg: number } {
   let ring = Infinity;
   let leg = Infinity;
@@ -235,7 +278,7 @@ export function courseClearance(gates: Gate[]): { ring: number; leg: number; wor
     // ring circle lies in the plane spanned by the side vector and up
     const sx = -g.nz;
     const sz = g.nx;
-    for (let k = 0; k < 24; k++) {
+    for (let k = 0; k < 24 && !g.lane; k++) {
       const a = (k / 24) * Math.PI * 2;
       const px = g.x + sx * Math.cos(a) * g.radius;
       const pz = g.z + sz * Math.cos(a) * g.radius;
@@ -248,11 +291,16 @@ export function courseClearance(gates: Gate[]): { ring: number; leg: number; wor
     }
     if (i > 0) {
       const p = gates[i - 1];
+      const a = gateEnds(p).exit;
+      const b = gateEnds(g).entry;
+      const splash = !!(p.lane || g.lane);
       for (let t = 0; t <= 1; t += 0.02) {
-        const x = p.x + (g.x - p.x) * t;
-        const z = p.z + (g.z - p.z) * t;
+        const x = a.x + (b.x - a.x) * t;
+        const z = a.z + (b.z - a.z) * t;
         const y = p.y + (g.y - p.y) * t;
-        const c = y - Math.max(terrainHeight(x, z, 6), SEA_LEVEL);
+        const h = terrainHeight(x, z, 6);
+        if (splash && h <= SEA_LEVEL) continue;
+        const c = y - Math.max(h, SEA_LEVEL);
         if (c < leg) {
           leg = c;
           worstLeg = i;
@@ -263,6 +311,17 @@ export function courseClearance(gates: Gate[]): { ring: number; leg: number; wor
   return { ring, leg, worstGate, worstLeg };
 }
 
+/** A splash lane's shallowest water (m deep) over its length and width, and 300 m before it. */
+export function laneDepth(g: Gate): number {
+  if (!g.lane) return Infinity;
+  const { half, halfWidth } = g.lane;
+  let depth = Infinity;
+  for (let a = -half - 300; a <= half; a += 25) {
+    for (const b of [-halfWidth, 0, halfWidth]) depth = Math.min(depth, SEA_LEVEL - terrainHeight(g.x + g.nx * a - g.nz * b, g.z + g.nz * a + g.nx * b, 7));
+  }
+  return depth;
+}
+
 /** Course length along the gates (m). */
 export function courseLength(gates: Gate[]): number {
   let l = 0;
@@ -270,7 +329,10 @@ export function courseLength(gates: Gate[]): number {
   return l;
 }
 
-/** Par time: the course flown at ~105 kt with some allowance for the turns. */
+/**
+ * Par time: the course flown at ~105 kt with some allowance for the turns, and 30 s for each splash
+ * lane (slowing down for it, the touchdown, speeding up again).
+ */
 export function coursePar(gates: Gate[]): number {
-  return Math.round((courseLength(gates) / 54) * 1.08);
+  return Math.round((courseLength(gates) / 54) * 1.08) + 30 * gates.filter((g) => g.lane).length;
 }
